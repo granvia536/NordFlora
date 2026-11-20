@@ -1,5 +1,11 @@
+import {Capacitor} from '@capacitor/core';
 import {initializeApp} from 'firebase/app';
-import {GoogleAuthProvider, getAuth} from 'firebase/auth';
+import {
+  GoogleAuthProvider,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+} from 'firebase/auth';
 import {
   doc,
   enableIndexedDbPersistence,
@@ -10,7 +16,10 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
+// Capacitor's Android WebView uses IndexedDB persistence for the Firebase JS session.
+export const auth = Capacitor.isNativePlatform()
+  ? initializeAuth(app, {persistence: indexedDBLocalPersistence})
+  : getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Enable offline persistence for Android PWA use without dropping cached reads
