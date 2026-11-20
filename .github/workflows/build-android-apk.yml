@@ -39,7 +39,7 @@ jobs:
 
       - name: Install project and Capacitor dependencies
         run: |
-          npm install --no-save --legacy-peer-deps --no-audit --no-fund @capacitor/core@8.6.2 @capacitor/cli@8.6.2 @capacitor/android@8.6.2
+          npm install --no-save --legacy-peer-deps --no-audit --no-fund @capacitor/core@8.6.2 @capacitor/cli@8.6.2 @capacitor/android@8.6.2 @capacitor-firebase/authentication@8.6.0
 
       - name: Create Capacitor configuration and widget bridge
         run: |
@@ -49,6 +49,12 @@ jobs:
             appId: 'com.nordflora.app',
             appName: 'NordFlora',
             webDir: 'dist',
+            plugins: {
+              FirebaseAuthentication: {
+                providers: ['google.com'],
+                skipNativeAuth: true,
+              },
+            },
           };
           export default config;
           EOF
@@ -140,6 +146,45 @@ jobs:
 
       - name: Generate Android project
         run: npx cap add android
+
+      - name: Configure native Google authentication
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          variables = Path("android/variables.gradle")
+          source = variables.read_text()
+          if "rgcfaIncludeGoogle" not in source:
+              source = source.replace("ext {", "ext {\\n    rgcfaIncludeGoogle = true\\n    androidxCredentialsVersion = '1.3.0'", 1)
+          variables.write_text(source)
+
+          # The Firebase Android app configuration is added after registering
+          # com.nordflora.app in Firebase. Keep the web build usable before then.
+          config = Path("google-services.json")
+          if config.exists():
+              Path("android/app/google-services.json").write_text(config.read_text())
+
+              root_gradle = Path("android/build.gradle")
+              root = root_gradle.read_text()
+              if "com.google.gms:google-services" not in root:
+                  marker = "dependencies {"
+                  if marker not in root:
+                      raise SystemExit("Could not find buildscript dependencies in android/build.gradle")
+                  root = root.replace(marker, marker + "\\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
+                  root_gradle.write_text(root)
+
+              app_gradle = Path("android/app/build.gradle")
+              app = app_gradle.read_text()
+              if "com.google.gms.google-services" not in app:
+                  marker = "apply plugin: 'com.android.application'"
+                  if marker not in app:
+                      raise SystemExit("Could not find Android application plugin in android/app/build.gradle")
+                  app = app.replace(marker, marker + "\\napply plugin: 'com.google.gms.google-services'", 1)
+                  app_gradle.write_text(app)
+              print("Firebase Android configuration found and installed.")
+          else:
+              print("WARNING: google-services.json is not yet in the repository. Native Google sign-in will need Firebase Android app registration before final use.")
+          PY
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -351,6 +396,8 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
+          echo "===== Android debug signing certificate (add this SHA-1 to Firebase) ====="
+          ./gradlew signingReport
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
