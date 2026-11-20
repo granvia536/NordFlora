@@ -1,0 +1,6 @@
+{
+  "name": "NordFlora — Barcelona North-Window Plant Widget",
+  "description": "Android home-screen widget and PWA to photograph your plants and species groups, look up species & care online, log lux light levels, track monthly Barcelona room temperatures & humidity, and know exactly when to water each plant.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

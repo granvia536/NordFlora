@@ -1,0 +1,316 @@
+{
+  "entities": {
+    "PlantRecord": {
+      "title": "PlantRecord",
+      "description": "An individual plant or group of the same species kept near a north-facing window in Barcelona, including photo, web-looked-up botanical details & care, latest lux reading, pot properties, and watering schedule anchor.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Unique document ID for the plant or species group."
+        },
+        "ownerId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Firebase Auth UID of the owner."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name for the plant or group."
+        },
+        "speciesId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Species preset identifier or custom."
+        },
+        "speciesName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Common species name."
+        },
+        "botanicalName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Scientific/botanical Latin name identified from photo lookup."
+        },
+        "careDetails": {
+          "type": "string",
+          "maxLength": 800,
+          "description": "Web-grounded care instructions (watering cues, soil, humidity, Barcelona north-window notes, pet safety)."
+        },
+        "idealLuxMin": {
+          "type": "number",
+          "description": "Minimum recommended indoor lux for this species."
+        },
+        "idealLuxMax": {
+          "type": "number",
+          "description": "Maximum recommended indoor lux for this species."
+        },
+        "sourceTitle": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Title of web reference source used for care lookup."
+        },
+        "sourceUrl": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "HTTPS URL of web reference source used for care lookup."
+        },
+        "entryType": {
+          "type": "string",
+          "enum": ["individual", "group"],
+          "description": "Whether this record tracks a single plant or a group of the same species."
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Number of plants in this entry (1 for individual, 2-200 for group)."
+        },
+        "potMaterial": {
+          "type": "string",
+          "enum": ["terracotta", "ceramic", "plastic"],
+          "description": "Container material affecting evaporation rate."
+        },
+        "potSize": {
+          "type": "string",
+          "enum": ["small", "medium", "large"],
+          "description": "Container size affecting soil moisture retention."
+        },
+        "baseWaterDays": {
+          "type": "number",
+          "description": "Baseline watering interval in days at 21C and 500 lux."
+        },
+        "latestLux": {
+          "type": "number",
+          "description": "Most recent recorded light intensity in lux."
+        },
+        "luxSource": {
+          "type": "string",
+          "enum": ["sensor", "camera", "manual"],
+          "description": "How the latest lux reading was obtained."
+        },
+        "lastLuxAt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 40,
+          "description": "ISO 8601 timestamp of the latest lux reading."
+        },
+        "lastWateredAt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 40,
+          "description": "ISO 8601 timestamp of when this plant or group was last watered."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Optional user notes for this plant or group."
+        },
+        "photoDataUrl": {
+          "type": "string",
+          "maxLength": 180000,
+          "description": "Compressed JPEG data URL captured by phone camera, or empty string."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "name",
+        "speciesId",
+        "speciesName",
+        "entryType",
+        "quantity",
+        "potMaterial",
+        "potSize",
+        "baseWaterDays",
+        "latestLux",
+        "luxSource",
+        "lastLuxAt",
+        "lastWateredAt",
+        "notes",
+        "photoDataUrl",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PlantLog": {
+      "title": "PlantLog",
+      "description": "Timestamped watering or lux measurement log entry for a plant or group.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Log entry ID."
+        },
+        "ownerId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Owner UID."
+        },
+        "plantId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Parent plant document ID."
+        },
+        "logType": {
+          "type": "string",
+          "enum": ["water", "lux"],
+          "description": "Event category."
+        },
+        "luxValue": {
+          "type": "number",
+          "description": "Measured lux value when logType is lux, or snapshot lux at watering."
+        },
+        "luxSource": {
+          "type": "string",
+          "enum": ["sensor", "camera", "manual", "none"],
+          "description": "Measurement source."
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Short event note."
+        },
+        "recordedAt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 40,
+          "description": "ISO 8601 timestamp of the event."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "plantId",
+        "logType",
+        "luxValue",
+        "luxSource",
+        "note",
+        "recordedAt",
+        "createdAt"
+      ]
+    },
+    "MonthlyTemp": {
+      "title": "MonthlyTemp",
+      "description": "Monthly indoor room temperature and humidity log for the Barcelona north-facing apartment.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}$",
+          "minLength": 7,
+          "maxLength": 7,
+          "description": "Month key in YYYY-MM format."
+        },
+        "ownerId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Owner UID."
+        },
+        "monthKey": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}$",
+          "minLength": 7,
+          "maxLength": 7,
+          "description": "Month key in YYYY-MM format."
+        },
+        "avgTempC": {
+          "type": "number",
+          "description": "Average room temperature in Celsius (5 to 42)."
+        },
+        "minTempC": {
+          "type": "number",
+          "description": "Typical nighttime low room temperature in Celsius (0 to 40)."
+        },
+        "maxTempC": {
+          "type": "number",
+          "description": "Typical afternoon high room temperature in Celsius (5 to 45)."
+        },
+        "humidityPct": {
+          "type": "number",
+          "description": "Estimated indoor relative humidity percentage (15 to 95)."
+        },
+        "heatingOrAc": {
+          "type": "string",
+          "enum": ["none", "heating", "ac", "natural_vent"],
+          "description": "Indoor climate conditioning mode."
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Monthly microclimate observation."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "monthKey",
+        "avgTempC",
+        "minTempC",
+        "maxTempC",
+        "humidityPct",
+        "heatingOrAc",
+        "note",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/plants/{plantId}": {
+      "schema": { "$ref": "#/entities/PlantRecord" },
+      "description": "User-owned plant or species group records."
+    },
+    "/users/{userId}/plants/{plantId}/logs/{logId}": {
+      "schema": { "$ref": "#/entities/PlantLog" },
+      "description": "Watering and lux measurement log entries for a plant or group."
+    },
+    "/users/{userId}/monthlyTemps/{monthId}": {
+      "schema": { "$ref": "#/entities/MonthlyTemp" },
+      "description": "Monthly room temperature and air humidity records for Barcelona apartment microclimate."
+    }
+  }
+}
