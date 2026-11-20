@@ -1,5 +1,7 @@
 import React, {useEffect, useState} from 'react';
-import {User, onAuthStateChanged, signInWithPopup, signOut} from 'firebase/auth';
+import {User, GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWithPopup, signOut} from 'firebase/auth';
+import {Capacitor} from '@capacitor/core';
+import {FirebaseAuthentication} from '@capacitor-firebase/authentication';
 import {
   Droplets,
   LayoutGrid,
@@ -95,9 +97,25 @@ const MainApp: React.FC = () => {
     setSigningIn(true);
     setAuthError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      if (Capacitor.isNativePlatform()) {
+        // Use the native Android Google account picker, then exchange its token
+        // for a Firebase JS SDK session so Firestore continues using auth.currentUser.
+        const result = await FirebaseAuthentication.signInWithGoogle({
+          skipNativeAuth: true,
+        });
+        const idToken = result.credential?.idToken;
+        const accessToken = result.credential?.accessToken;
+        if (!idToken) {
+          throw new Error('Google sign-in did not return an ID token. Check the Android Firebase app and SHA-1 setup.');
+        }
+        const credential = GoogleAuthProvider.credential(idToken, accessToken);
+        await signInWithCredential(auth, credential);
+      } else {
+        await signInWithPopup(auth, googleProvider);
+      }
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Google sign-in was cancelled.');
+      const message = err instanceof Error ? err.message : 'Google sign-in was cancelled.';
+      setAuthError(message);
     } finally {
       setSigningIn(false);
     }
