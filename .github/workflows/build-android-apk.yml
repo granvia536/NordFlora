@@ -120,7 +120,7 @@ jobs:
           if import_line not in source:
               raise SystemExit("Expected App.tsx types import not found; refusing to patch.")
           if new_import not in source:
-              source = source.replace(import_line, import_line + "\\n" + new_import, 1)
+              source = source.replace(import_line, import_line + "\n" + new_import, 1)
           anchor = "  const handleSavePlant = async (input: SavePlantInput) => {"
           effect = """  useEffect(() => {
               if (!authReady) return;
@@ -342,7 +342,7 @@ jobs:
           if "NordFloraWidgetProvider" not in manifest:
               if "</application>" not in manifest:
                   raise SystemExit("AndroidManifest.xml has no application closing tag.")
-              manifest = manifest.replace("</application>", receiver + "\\n    </application>")
+              manifest = manifest.replace("</application>", receiver + "\n    </application>")
           path.write_text(manifest)
           PY
 
