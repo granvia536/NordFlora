@@ -155,7 +155,7 @@ jobs:
           variables = Path("android/variables.gradle")
           source = variables.read_text()
           if "rgcfaIncludeGoogle" not in source:
-              source = source.replace("ext {", "ext {\\n    rgcfaIncludeGoogle = true\\n    androidxCredentialsVersion = '1.3.0'", 1)
+              source = source.replace("ext {", "ext {\n    rgcfaIncludeGoogle = true\n    androidxCredentialsVersion = '1.3.0'", 1)
           variables.write_text(source)
 
           # The Firebase Android app configuration is added after registering
@@ -170,7 +170,7 @@ jobs:
                   marker = "dependencies {"
                   if marker not in root:
                       raise SystemExit("Could not find buildscript dependencies in android/build.gradle")
-                  root = root.replace(marker, marker + "\\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
+                  root = root.replace(marker, marker + "\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
                   root_gradle.write_text(root)
 
               app_gradle = Path("android/app/build.gradle")
@@ -179,7 +179,7 @@ jobs:
                   marker = "apply plugin: 'com.android.application'"
                   if marker not in app:
                       raise SystemExit("Could not find Android application plugin in android/app/build.gradle")
-                  app = app.replace(marker, marker + "\\napply plugin: 'com.google.gms.google-services'", 1)
+                  app = app.replace(marker, marker + "\napply plugin: 'com.google.gms.google-services'", 1)
                   app_gradle.write_text(app)
               print("Firebase Android configuration found and installed.")
           else:
