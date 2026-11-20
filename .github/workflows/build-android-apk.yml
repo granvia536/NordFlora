@@ -1,4 +1,3 @@
-
 name: Build NordFlora Android APK
 
 on:
@@ -13,27 +12,30 @@ permissions:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v4
 
       - name: Set up Node
-        uses: actions/setup-node@v7.1.0
+        uses: actions/setup-node@v4
         with:
           node-version: 22
 
-           - name: Set up Java
-        uses: actions/setup-java@v6.3.0
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '21'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v3
         with:
-          packages: platform-tools
+          packages: |
+            platform-tools
+            platforms;android-36
+            build-tools;36.0.0
 
       - name: Install project and Capacitor dependencies
         run: |
@@ -67,27 +69,21 @@ jobs:
           ): Promise<void> {
             if (!Capacitor.isNativePlatform()) return;
 
-            const due = plants
+            const scheduled = plants
               .map((plant) => ({
                 plant,
                 calc: calculateWateringSchedule(plant, monthlyTemps),
               }))
-              .filter((item) => item.calc.daysUntilWater <= 0)
               .sort((a, b) => a.calc.daysUntilWater - b.calc.daysUntilWater);
 
-            const next = plants
-              .map((plant) => ({
-                plant,
-                calc: calculateWateringSchedule(plant, monthlyTemps),
-              }))
-              .filter((item) => item.calc.daysUntilWater > 0)
-              .sort((a, b) => a.calc.daysUntilWater - b.calc.daysUntilWater)[0];
+            const due = scheduled.filter(({calc}) => calc.daysUntilWater <= 0);
+            const next = scheduled.find(({calc}) => calc.daysUntilWater > 0);
 
             const headline =
               plants.length === 0
                 ? 'No plants added yet'
                 : due.length > 0
-                  ? `Water ${due.length} ${due.length === 1 ? 'plant' : 'plants'} today`
+                  ? `Water ${due.length} ${due.length === 1 ? 'plant' : 'plants'}`
                   : 'Nothing needs water today';
 
             const lines = due.slice(0, 3).map(
@@ -120,14 +116,11 @@ jobs:
           path = Path("src/App.tsx")
           source = path.read_text()
           import_line = "import {AppView, LuxSource, MonthlyTemp, PlantLookupResult, PlantRecord} from './types';"
+          new_import = "import {syncNordFloraWidget} from './lib/nativeWidget';"
           if import_line not in source:
-              raise SystemExit("Could not find the expected App.tsx types import; stopping without changing the app.")
-          if "syncNordFloraWidget" not in source:
-              source = source.replace(
-                  import_line,
-                  import_line + "\nimport {syncNordFloraWidget} from './lib/nativeWidget';",
-                  1,
-              )
+              raise SystemExit("Expected App.tsx types import not found; refusing to patch.")
+          if new_import not in source:
+              source = source.replace(import_line, import_line + "\\n" + new_import, 1)
           anchor = "  const handleSavePlant = async (input: SavePlantInput) => {"
           effect = """  useEffect(() => {
               if (!authReady) return;
@@ -137,7 +130,7 @@ jobs:
           """
           if "void syncNordFloraWidget(plants, monthlyTemps)" not in source:
               if anchor not in source:
-                  raise SystemExit("Could not find the expected App.tsx insertion point; stopping without changing the app.")
+                  raise SystemExit("Expected App.tsx insertion point not found; refusing to patch.")
               source = source.replace(anchor, effect + anchor, 1)
           path.write_text(source)
           PY
@@ -267,7 +260,6 @@ jobs:
               android:orientation="vertical"
               android:padding="14dp"
               android:background="#F7F7F4">
-
               <TextView
                   android:id="@+id/widget_title"
                   android:layout_width="match_parent"
@@ -276,7 +268,6 @@ jobs:
                   android:textColor="#1F513B"
                   android:textSize="13sp"
                   android:textStyle="bold" />
-
               <TextView
                   android:id="@+id/widget_headline"
                   android:layout_width="match_parent"
@@ -287,7 +278,6 @@ jobs:
                   android:textSize="16sp"
                   android:textStyle="bold"
                   android:maxLines="1" />
-
               <TextView
                   android:id="@+id/widget_detail"
                   android:layout_width="match_parent"
@@ -295,7 +285,6 @@ jobs:
                   android:text="Your watering schedule"
                   android:textColor="#4B5850"
                   android:textSize="10sp" />
-
               <TextView
                   android:id="@+id/widget_line_1"
                   android:layout_width="match_parent"
@@ -304,7 +293,6 @@ jobs:
                   android:textColor="#18221D"
                   android:textSize="12sp"
                   android:maxLines="1" />
-
               <TextView
                   android:id="@+id/widget_line_2"
                   android:layout_width="match_parent"
@@ -312,7 +300,6 @@ jobs:
                   android:textColor="#18221D"
                   android:textSize="12sp"
                   android:maxLines="1" />
-
               <TextView
                   android:id="@+id/widget_line_3"
                   android:layout_width="match_parent"
@@ -339,11 +326,11 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           path = Path("android/app/src/main/AndroidManifest.xml")
-          text = path.read_text()
+          manifest = path.read_text()
           receiver = """
               <receiver
                   android:name="com.nordflora.app.NordFloraWidgetProvider"
-                  android:exported="false">
+                  android:exported="true">
                   <intent-filter>
                       <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                   </intent-filter>
@@ -352,19 +339,21 @@ jobs:
                       android:resource="@xml/nordflora_widget_info" />
               </receiver>
           """
-          if "NordFloraWidgetProvider" not in text:
-              text = text.replace("</application>", receiver + "\n    </application>")
-          path.write_text(text)
+          if "NordFloraWidgetProvider" not in manifest:
+              if "</application>" not in manifest:
+                  raise SystemExit("AndroidManifest.xml has no application closing tag.")
+              manifest = manifest.replace("</application>", receiver + "\\n    </application>")
+          path.write_text(manifest)
           PY
 
       - name: Build debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
-        uses: actions/upload-artifact@v7.0.2
+        uses: actions/upload-artifact@v4
         with:
           name: NordFlora-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
