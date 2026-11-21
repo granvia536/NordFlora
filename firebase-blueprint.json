@@ -2,7 +2,7 @@
   "entities": {
     "PlantRecord": {
       "title": "PlantRecord",
-      "description": "An individual plant or group of the same species kept near a north-facing window in Barcelona, including photo, web-looked-up botanical details & care, latest lux reading, pot properties, and watering schedule anchor.",
+      "description": "An individual plant or group of the same species kept near a north-facing window in Barcelona, including photo, web-looked-up botanical details & care, lux readings & average daylight lux, pot properties, and watering schedule anchor.",
       "type": "object",
       "properties": {
         "id": {
@@ -92,6 +92,19 @@
         "latestLux": {
           "type": "number",
           "description": "Most recent recorded light intensity in lux."
+        },
+        "avgLux": {
+          "type": "number",
+          "description": "Running average of recorded lux readings for this plant."
+        },
+        "luxReadingCount": {
+          "type": "integer",
+          "description": "Total number of lux readings recorded for this plant."
+        },
+        "lastLuxMonth": {
+          "type": "string",
+          "maxLength": 10,
+          "description": "Month key (YYYY-MM) of the most recent monthly lux reading."
         },
         "luxSource": {
           "type": "string",
@@ -191,6 +204,11 @@
           "type": "string",
           "enum": ["sensor", "camera", "manual", "none"],
           "description": "Measurement source."
+        },
+        "readingPeriod": {
+          "type": "string",
+          "enum": ["peak_noon", "general", "none"],
+          "description": "Whether lux reading was taken at Barcelona peak solar noon or general daytime."
         },
         "note": {
           "type": "string",

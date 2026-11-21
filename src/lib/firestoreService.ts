@@ -22,7 +22,9 @@ import {
   PlantRecord,
   PotMaterial,
   PotSize,
+  ReadingPeriod,
 } from '../types';
+import {getCurrentMonthKey} from './botanicalEngine';
 
 function makeSafeId(prefix: string): string {
   const raw =
@@ -169,6 +171,7 @@ export interface SavePlantInput {
   potSize: PotSize;
   baseWaterDays: number;
   latestLux: number;
+  avgLux?: number;
   luxSource: LuxSource;
   lastLuxAt: string;
   lastWateredAt: string;
@@ -182,6 +185,12 @@ export async function createPlant(userId: string, input: SavePlantInput): Promis
   const entryType: EntryType = input.entryType === 'group' ? 'group' : 'individual';
   const quantity =
     entryType === 'individual' ? 1 : Math.round(clamp(input.quantity || 2, 2, 200));
+
+  const safeLatestLux = Math.round(clamp(input.latestLux, 0, 150000));
+  const rawMonth = input.lastLuxAt.slice(0, 7);
+  const lastLuxMonth = /^[0-9]{4}-[0-9]{2}$/.test(rawMonth)
+    ? rawMonth
+    : getCurrentMonthKey();
 
   const payload = {
     id: plantId,
@@ -200,7 +209,10 @@ export async function createPlant(userId: string, input: SavePlantInput): Promis
     potMaterial: input.potMaterial,
     potSize: input.potSize,
     baseWaterDays: Number(clamp(input.baseWaterDays, 1, 90).toFixed(1)),
-    latestLux: Math.round(clamp(input.latestLux, 0, 150000)),
+    latestLux: safeLatestLux,
+    avgLux: safeLatestLux,
+    luxReadingCount: 1,
+    lastLuxMonth,
     luxSource: input.luxSource,
     lastLuxAt: input.lastLuxAt.slice(0, 40),
     lastWateredAt: input.lastWateredAt.slice(0, 40),
@@ -229,7 +241,7 @@ export async function updatePlantDetails(
     entryType === 'individual' ? 1 : Math.round(clamp(input.quantity || 2, 2, 200));
 
   try {
-    await updateDoc(doc(db, 'users', userId, 'plants', plantId), {
+    const updatePayload: Record<string, unknown> = {
       name: input.name.trim().slice(0, 80) || 'Unnamed Plant',
       speciesId: input.speciesId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || 'custom',
       speciesName: input.speciesName.trim().slice(0, 80) || 'Houseplant',
@@ -251,7 +263,11 @@ export async function updatePlantDetails(
       notes: input.notes.trim().slice(0, 300),
       photoDataUrl: input.photoDataUrl.slice(0, 175000),
       updatedAt: serverTimestamp(),
-    });
+    };
+    if (typeof input.avgLux === 'number') {
+      updatePayload.avgLux = Math.round(clamp(input.avgLux, 0, 150000));
+    }
+    await updateDoc(doc(db, 'users', userId, 'plants', plantId), updatePayload);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -279,6 +295,7 @@ export async function markPlantWatered(
       logType: 'water',
       luxValue: Math.round(clamp(plant.latestLux, 0, 150000)),
       luxSource: 'none',
+      readingPeriod: 'none',
       note: note.trim().slice(0, 160),
       recordedAt: nowIso,
       createdAt: serverTimestamp(),
@@ -291,32 +308,52 @@ export async function markPlantWatered(
 
 export async function recordPlantLux(
   userId: string,
-  plantId: string,
+  plant: PlantRecord,
   luxValue: number,
   luxSource: LuxSource,
+  readingPeriod: Exclude<ReadingPeriod, 'none'> = 'peak_noon',
   note = '',
 ): Promise<void> {
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const nowIso = now.toISOString();
   const safeLux = Math.round(clamp(luxValue, 0, 150000));
   const logId = makeSafeId('lux');
-  const plantPath = `users/${userId}/plants/${plantId}`;
+  const plantPath = `users/${userId}/plants/${plant.id}`;
+
+  const prevCount = Math.max(0, Math.round(plant.luxReadingCount ?? 1));
+  const prevAvg = Math.max(0, plant.avgLux ?? plant.latestLux);
+  const newCount = Math.min(10000, prevCount + 1);
+  const newAvg =
+    newCount <= 1
+      ? safeLux
+      : Math.round(clamp((prevAvg * prevCount + safeLux) / newCount, 0, 150000));
+  const lastLuxMonth = getCurrentMonthKey(now);
 
   try {
     const batch = writeBatch(db);
-    batch.update(doc(db, 'users', userId, 'plants', plantId), {
+    batch.update(doc(db, 'users', userId, 'plants', plant.id), {
       latestLux: safeLux,
+      avgLux: newAvg,
+      luxReadingCount: newCount,
+      lastLuxMonth,
       luxSource,
       lastLuxAt: nowIso,
       updatedAt: serverTimestamp(),
     });
-    batch.set(doc(db, 'users', userId, 'plants', plantId, 'logs', logId), {
+    batch.set(doc(db, 'users', userId, 'plants', plant.id, 'logs', logId), {
       id: logId,
       ownerId: userId,
-      plantId,
+      plantId: plant.id,
       logType: 'lux',
       luxValue: safeLux,
       luxSource,
-      note: (note || `Recorded ${safeLux} lux (${luxSource})`).trim().slice(0, 160),
+      readingPeriod,
+      note: (
+        note ||
+        `${readingPeriod === 'peak_noon' ? 'Barcelona peak daylight' : 'General time'} · ${safeLux} lux (${luxSource})`
+      )
+        .trim()
+        .slice(0, 160),
       recordedAt: nowIso,
       createdAt: serverTimestamp(),
     });

@@ -14,6 +14,8 @@ import {
 import {
   calculateWateringSchedule,
   formatDueSummary,
+  getBarcelonaPeakWindow,
+  getPlantAverageLuxStats,
 } from '../lib/botanicalEngine';
 import {identifyPlantFromPhoto, subscribePlantLogs} from '../lib/firestoreService';
 import {MonthlyTemp, PlantLog, PlantLookupResult, PlantRecord} from '../types';
@@ -63,7 +65,10 @@ export const PlantDetailModal: React.FC<PlantDetailModalProps> = ({
 
   if (!plant) return null;
 
-  const calc = calculateWateringSchedule(plant, monthlyTemps);
+  const now = new Date();
+  const calc = calculateWateringSchedule(plant, monthlyTemps, now);
+  const luxStats = getPlantAverageLuxStats(plant, logs, now);
+  const peakWindow = getBarcelonaPeakWindow(now);
   const nextDateLabel = calc.nextWaterDate.toLocaleDateString('en-GB', {
     weekday: 'short',
     day: 'numeric',
@@ -226,15 +231,25 @@ export const PlantDetailModal: React.FC<PlantDetailModalProps> = ({
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 rounded-xl bg-[#F7F7F4]">
-                      <span className="text-xs text-[#4B5850] block">Recorded Light</span>
+                      <span className="text-xs text-[#4B5850] block">Average Daylight Lux</span>
                       <span className="text-base font-semibold font-mono tabular-nums text-[#18221D]">
-                        {plant.latestLux} lux
+                        {luxStats.avgRecordedLux} lux
                       </span>
                       <span className="text-[11px] text-[#4B5850] block">
-                        {calc.lightAssessment}
-                        {plant.idealLuxMin && plant.idealLuxMax
-                          ? ` (${plant.idealLuxMin}–${plant.idealLuxMax})`
-                          : ''}
+                        {calc.lightAssessment} · {luxStats.readingCount}{' '}
+                        {luxStats.readingCount === 1 ? 'reading' : 'readings'}
+                      </span>
+                      <span className="text-[11px] font-mono tabular-nums text-[#4B5850] block">
+                        Latest {plant.latestLux} · Day mean ~{luxStats.estimatedFullDayLux} lx
+                      </span>
+                      <span
+                        className={`text-[11px] font-medium block mt-0.5 ${
+                          luxStats.dueForMonthlyLux ? 'text-[#B45309]' : 'text-[#1F513B]'
+                        }`}
+                      >
+                        {luxStats.dueForMonthlyLux
+                          ? `Due in ${peakWindow.monthName} (~${peakWindow.peakTimeLabel})`
+                          : `${peakWindow.monthName} reading logged`}
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-[#F7F7F4]">
@@ -245,6 +260,11 @@ export const PlantDetailModal: React.FC<PlantDetailModalProps> = ({
                       <span className="text-[11px] text-[#4B5850] block">
                         {calc.effectiveHumidityPct}% RH · {calc.daylightHours}h light
                       </span>
+                      {plant.idealLuxMin && plant.idealLuxMax ? (
+                        <span className="text-[11px] font-mono tabular-nums text-[#4B5850] block mt-0.5">
+                          Target {plant.idealLuxMin}–{plant.idealLuxMax} lx
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -373,6 +393,12 @@ export const PlantDetailModal: React.FC<PlantDetailModalProps> = ({
                             ? 'Watered'
                             : `Measured ${log.luxValue} lux`}
                         </span>
+                        {log.logType === 'lux' && log.readingPeriod === 'peak_noon' && (
+                          <span className="text-[#1F513B]"> · Barcelona peak daylight</span>
+                        )}
+                        {log.logType === 'lux' && log.readingPeriod === 'general' && (
+                          <span className="text-[#4B5850]"> · General time</span>
+                        )}
                         {log.note && <span className="text-[#4B5850]"> · {log.note}</span>}
                       </div>
                       <span className="font-mono tabular-nums text-[#4B5850] shrink-0">

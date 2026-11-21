@@ -1,5 +1,6 @@
 import {
   MonthlyTemp,
+  PlantLog,
   PlantRecord,
   ScheduleFactor,
   SpeciesPreset,
@@ -191,6 +192,181 @@ export function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+export interface BarcelonaPeakWindow {
+  hour: number;
+  minute: number;
+  peakTimeLabel: string;
+  timeRangeLabel: string;
+  isDST: boolean;
+  timezoneLabel: 'CET' | 'CEST';
+  monthName: string;
+  isNowInPeakWindow: boolean;
+}
+
+function getMadridTimeParts(date: Date): {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  isDST: boolean;
+} {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Madrid',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(date);
+
+    const getNum = (type: string) =>
+      Number(parts.find((p) => p.type === type)?.value ?? 0);
+    const tzOffset = parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+    const isDST = tzOffset.includes('+2') || tzOffset.includes('CEST');
+
+    return {
+      year: getNum('year') || date.getFullYear(),
+      month: getNum('month') || date.getMonth() + 1,
+      day: getNum('day') || date.getDate(),
+      hour: getNum('hour') % 24,
+      minute: getNum('minute'),
+      isDST,
+    };
+  } catch {
+    const m = date.getMonth() + 1;
+    const isDST = m >= 4 && m <= 9;
+    return {
+      year: date.getFullYear(),
+      month: m,
+      day: date.getDate(),
+      hour: date.getHours(),
+      minute: date.getMinutes(),
+      isDST,
+    };
+  }
+}
+
+function formatClock(totalMinutes: number): string {
+  const clamped = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
+  const h = Math.floor(clamped / 60);
+  const m = clamped % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+export function getBarcelonaPeakWindow(date = new Date()): BarcelonaPeakWindow {
+  const madrid = getMadridTimeParts(date);
+  const startOfYear = new Date(Date.UTC(madrid.year, 0, 1));
+  const currentUtc = new Date(Date.UTC(madrid.year, madrid.month - 1, madrid.day));
+  const dayOfYear = Math.max(
+    1,
+    Math.round((currentUtc.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+  );
+
+  // Equation of time + Barcelona longitude (2.17°E vs CET 15°E)
+  const b = (2 * Math.PI * (dayOfYear - 81)) / 365;
+  const eotMinutes = 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
+  const solarNoonUtcMinutes = 720 - 4 * 2.17 - eotMinutes;
+  const localSolarNoonMinutes = Math.round(solarNoonUtcMinutes + (madrid.isDST ? 120 : 60));
+
+  const hour = Math.floor(localSolarNoonMinutes / 60);
+  const minute = localSolarNoonMinutes % 60;
+  const timezoneLabel = madrid.isDST ? 'CEST' : 'CET';
+  const peakTimeLabel = `${formatClock(localSolarNoonMinutes)} ${timezoneLabel}`;
+  const timeRangeLabel = `${formatClock(localSolarNoonMinutes - 20)}–${formatClock(localSolarNoonMinutes + 20)} ${timezoneLabel}`;
+
+  const currentLocalMinutes = madrid.hour * 60 + madrid.minute;
+  const isNowInPeakWindow = Math.abs(currentLocalMinutes - localSolarNoonMinutes) <= 45;
+  const monthName = BARCELONA_MONTHLY_BASELINE[madrid.month]?.monthName ?? 'This month';
+
+  return {
+    hour,
+    minute,
+    peakTimeLabel,
+    timeRangeLabel,
+    isDST: madrid.isDST,
+    timezoneLabel,
+    monthName,
+    isNowInPeakWindow,
+  };
+}
+
+export function buildMonthlyLuxReminderIcs(date = new Date()): string {
+  const peak = getBarcelonaPeakWindow(date);
+  const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+  const nextPeak = getBarcelonaPeakWindow(nextMonth);
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const dtStart = `${nextMonth.getFullYear()}${pad2(nextMonth.getMonth() + 1)}01T${pad2(nextPeak.hour)}${pad2(nextPeak.minute)}00`;
+  const stamp = date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//NordFlora//Barcelona North Window//EN',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:nordflora-monthly-lux-${date.getFullYear()}@nordflora.app`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART:${dtStart}`,
+    'DURATION:PT15M',
+    'RRULE:FREQ=MONTHLY;BYMONTHDAY=1',
+    'SUMMARY:NordFlora: Measure Barcelona peak north-window lux',
+    `DESCRIPTION:Strongest Barcelona daylight window (~${peak.timeRangeLabel}). Open NordFlora -> Lux Meter to log each plant and update its average daylight lux.`,
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Take monthly peak daylight lux reading in Barcelona',
+    'TRIGGER:-PT0M',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+}
+
+export interface PlantLuxStats {
+  avgRecordedLux: number;
+  readingCount: number;
+  estimatedFullDayLux: number;
+  lastLuxMonth: string;
+  dueForMonthlyLux: boolean;
+}
+
+export function getPlantAverageLuxStats(
+  plant: PlantRecord,
+  logs?: PlantLog[],
+  now = new Date(),
+): PlantLuxStats {
+  const currentMonthKey = getCurrentMonthKey(now);
+  const luxLogs = logs?.filter((l) => l.logType === 'lux') ?? [];
+
+  let avgRecordedLux = Math.round(plant.avgLux ?? plant.latestLux);
+  let readingCount = plant.luxReadingCount ?? 1;
+
+  if (luxLogs.length > 0 && luxLogs.length >= readingCount) {
+    const sum = luxLogs.reduce((acc, item) => acc + item.luxValue, 0);
+    avgRecordedLux = Math.round(sum / luxLogs.length);
+    readingCount = luxLogs.length;
+  }
+
+  // North-facing diffuse skylight diurnal mean across the full day is ~0.62x solar-noon peak
+  const estimatedFullDayLux = Math.round(avgRecordedLux * 0.62);
+  const derivedLastMonth =
+    plant.lastLuxMonth && /^[0-9]{4}-[0-9]{2}$/.test(plant.lastLuxMonth)
+      ? plant.lastLuxMonth
+      : plant.lastLuxAt.slice(0, 7);
+  const dueForMonthlyLux = derivedLastMonth !== currentMonthKey;
+
+  return {
+    avgRecordedLux,
+    readingCount,
+    estimatedFullDayLux,
+    lastLuxMonth: derivedLastMonth,
+    dueForMonthlyLux,
+  };
+}
+
 export function calculateWateringSchedule(
   plant: PlantRecord,
   monthlyTemps: MonthlyTemp[],
@@ -218,27 +394,32 @@ export function calculateWateringSchedule(
     : baseline.avgHumidityPct;
 
   const factors: ScheduleFactor[] = [];
+  const effectiveLux = plant.avgLux ?? plant.latestLux;
+  const readingCount = plant.luxReadingCount ?? 1;
 
-  // 1. Light (Lux) factor for north-facing Barcelona window
+  // 1. Light (Average Daylight Lux) factor for north-facing Barcelona window
   // Reference 500 lux = 1.0x. Dim light slows transpiration; brighter reflected light speeds uptake.
   let luxMult = 1.0;
-  if (plant.latestLux < 150) {
+  if (effectiveLux < 150) {
     luxMult = 1.38;
-  } else if (plant.latestLux < 300) {
+  } else if (effectiveLux < 300) {
     luxMult = 1.22;
-  } else if (plant.latestLux < 500) {
+  } else if (effectiveLux < 500) {
     luxMult = 1.08;
-  } else if (plant.latestLux <= 900) {
+  } else if (effectiveLux <= 900) {
     luxMult = 1.0;
-  } else if (plant.latestLux <= 1600) {
+  } else if (effectiveLux <= 1600) {
     luxMult = 0.88;
   } else {
     luxMult = 0.78;
   }
   factors.push({
-    label: 'Light intensity',
+    label: readingCount > 1 ? 'Average daylight lux' : 'Light intensity',
     multiplier: luxMult,
-    detail: `${Math.round(plant.latestLux)} lux recorded`,
+    detail:
+      readingCount > 1
+        ? `${Math.round(effectiveLux)} lux avg (${readingCount} readings)`
+        : `${Math.round(effectiveLux)} lux recorded`,
   });
 
   // 2. Room temperature factor (reference 21°C = 1.0x, ~3% per °C)
@@ -315,9 +496,9 @@ export function calculateWateringSchedule(
   const minLux = plant.idealLuxMin ?? preset?.idealLuxMin ?? 250;
   const maxLux = plant.idealLuxMax ?? preset?.idealLuxMax ?? 1600;
   let lightAssessment: 'Too Dim' | 'Ideal North Light' | 'Bright Indirect' = 'Ideal North Light';
-  if (plant.latestLux < minLux) {
+  if (effectiveLux < minLux) {
     lightAssessment = 'Too Dim';
-  } else if (plant.latestLux > maxLux) {
+  } else if (effectiveLux > maxLux) {
     lightAssessment = 'Bright Indirect';
   }
 

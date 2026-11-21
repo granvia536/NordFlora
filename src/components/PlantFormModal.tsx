@@ -175,6 +175,7 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
         potSize,
         baseWaterDays,
         latestLux,
+        avgLux: (initialPlant?.luxReadingCount ?? 1) <= 1 ? latestLux : undefined,
         luxSource,
         lastLuxAt: initialPlant?.lastLuxAt ?? new Date().toISOString(),
         lastWateredAt: wateredIso,

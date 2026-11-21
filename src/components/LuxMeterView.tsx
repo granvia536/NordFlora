@@ -1,6 +1,20 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {Camera, Check, Gauge, Sun} from 'lucide-react';
-import {LUX_REFERENCE_ZONES} from '../lib/botanicalEngine';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {
+  Bell,
+  CalendarPlus,
+  Camera,
+  Check,
+  Clock,
+  Gauge,
+  Sun,
+} from 'lucide-react';
+import {
+  LUX_REFERENCE_ZONES,
+  buildMonthlyLuxReminderIcs,
+  getBarcelonaPeakWindow,
+  getCurrentMonthKey,
+  getPlantAverageLuxStats,
+} from '../lib/botanicalEngine';
 import {LuxSource, PlantRecord} from '../types';
 
 interface AmbientLightSensorInstance {
@@ -18,6 +32,7 @@ interface LuxMeterViewProps {
     plantId: string,
     luxValue: number,
     source: LuxSource,
+    readingPeriod: 'peak_noon' | 'general',
     note?: string,
   ) => Promise<void>;
 }
@@ -27,29 +42,47 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
   initialPlantId,
   onSaveLux,
 }) => {
+  const now = new Date();
+  const currentMonthKey = getCurrentMonthKey(now);
+  const peakWindow = useMemo(() => getBarcelonaPeakWindow(now), [now.toDateString()]);
+
   const [selectedPlantId, setSelectedPlantId] = useState<string>(
     initialPlantId || plants[0]?.id || '',
   );
   const [luxValue, setLuxValue] = useState<number>(350);
   const [luxSource, setLuxSource] = useState<LuxSource>('manual');
+  const [readingPeriod, setReadingPeriod] = useState<'peak_noon' | 'general'>('peak_noon');
+  const [noteInput, setNoteInput] = useState<string>('');
   const [sensorActive, setSensorActive] = useState(false);
   const [sensorError, setSensorError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
+  const [reminderFeedback, setReminderFeedback] = useState<string | null>(null);
+  const [notifStatus, setNotifStatus] = useState<NotificationPermission | 'unsupported'>(() =>
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
+  );
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  const duePlants = useMemo(
+    () =>
+      plants.filter(
+        (p) => getPlantAverageLuxStats(p, undefined, now).dueForMonthlyLux,
+      ),
+    [plants, currentMonthKey],
+  );
+
   useEffect(() => {
     if (initialPlantId) {
       setSelectedPlantId(initialPlantId);
-    } else if (!selectedPlantId && plants[0]) {
-      setSelectedPlantId(plants[0].id);
+    } else if (!selectedPlantId && (duePlants[0] || plants[0])) {
+      setSelectedPlantId((duePlants[0] ?? plants[0]).id);
     }
-  }, [initialPlantId, plants, selectedPlantId]);
+  }, [initialPlantId, plants, duePlants, selectedPlantId]);
 
   useEffect(() => {
     return () => {
@@ -167,16 +200,72 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
     }
   };
 
+  const handleDownloadMonthlyCalendarReminder = () => {
+    const icsContent = buildMonthlyLuxReminderIcs(new Date());
+    const blob = new Blob([icsContent], {type: 'text/calendar;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'nordflora-barcelona-monthly-lux.ics';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setReminderFeedback(
+      `Calendar file downloaded — import it to get a monthly alarm around ${peakWindow.peakTimeLabel}.`,
+    );
+  };
+
+  const handleEnableBrowserAlert = async () => {
+    if (typeof Notification === 'undefined') return;
+    const perm = await Notification.requestPermission();
+    setNotifStatus(perm);
+    if (perm === 'granted') {
+      new Notification('NordFlora Monthly Lux Reminder', {
+        body: `Best Barcelona daylight window today: ${peakWindow.timeRangeLabel}. Measure each plant to update its average daylight lux.`,
+        icon: '/pwa-192x192.png',
+      });
+      setReminderFeedback('Browser reminders enabled for monthly peak-lux check-ins.');
+    }
+  };
+
+  const selectedPlant = plants.find((p) => p.id === selectedPlantId) ?? null;
+  const selectedStats = selectedPlant
+    ? getPlantAverageLuxStats(selectedPlant, undefined, now)
+    : null;
+
+  const previewNewAvg = selectedStats
+    ? Math.round(
+        (selectedStats.avgRecordedLux * selectedStats.readingCount + luxValue) /
+          (selectedStats.readingCount + 1),
+      )
+    : luxValue;
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlantId) return;
     setSaving(true);
     setSavedFeedback(null);
     try {
-      await onSaveLux(selectedPlantId, luxValue, luxSource);
-      const targetName = plants.find((p) => p.id === selectedPlantId)?.name ?? 'Plant';
-      setSavedFeedback(`Saved ${luxValue} lux to ${targetName}`);
+      await onSaveLux(
+        selectedPlantId,
+        luxValue,
+        luxSource,
+        readingPeriod,
+        noteInput.trim() || undefined,
+      );
+      const targetName = selectedPlant?.name ?? 'Plant';
+      setSavedFeedback(
+        `Saved ${luxValue} lux to ${targetName} · New avg ${previewNewAvg} lx`,
+      );
+      setNoteInput('');
       stopCameraEstimator();
+
+      // Advance smoothly to the next plant due this month if any remain
+      const remainingDue = duePlants.filter((p) => p.id !== selectedPlantId);
+      if (remainingDue.length > 0) {
+        setSelectedPlantId(remainingDue[0].id);
+      }
     } finally {
       setSaving(false);
     }
@@ -191,6 +280,8 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
           ? 'North windowsill edge — supports Monstera, Peace Lily, Ferns'
           : 'Bright reflected courtyard sky — faster transpiration';
 
+  const measuredCount = plants.length - duePlants.length;
+
   return (
     <div className="space-y-6">
       <div>
@@ -198,9 +289,94 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
           Light Level (Lux) Recorder
         </h1>
         <p className="text-sm text-[#4B5850] mt-1">
-          Measure or log the illuminance at each plant&apos;s spot along your north-facing window.
+          Measure illuminance once a month at Barcelona&apos;s strongest daylight hour to compute
+          each plant&apos;s true average daylight lux.
         </p>
       </div>
+
+      {/* Monthly Barcelona Strongest-Daylight Check-In & Reminder Card */}
+      <section className="rounded-2xl bg-white border border-[#E4E6DF] p-5 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[#1F513B] font-medium">
+              <Clock className="w-4 h-4 shrink-0" />
+              <span>
+                Strongest Barcelona Daylight ({peakWindow.monthName}):{' '}
+                <strong className="font-mono tabular-nums">{peakWindow.timeRangeLabel}</strong>{' '}
+                (Solar noon {peakWindow.peakTimeLabel})
+              </span>
+              {peakWindow.isNowInPeakWindow && (
+                <span className="text-[#B45309] font-semibold">· Peak window active now</span>
+              )}
+            </div>
+            <h2 className="text-base font-semibold text-[#18221D]">
+              {plants.length === 0
+                ? 'Add plants to start monthly peak-lux tracking'
+                : duePlants.length === 0
+                  ? `All ${plants.length} ${plants.length === 1 ? 'plant' : 'plants'} measured for ${peakWindow.monthName}`
+                  : `${duePlants.length} of ${plants.length} ${
+                      plants.length === 1 ? 'plant' : 'plants'
+                    } due for ${peakWindow.monthName} peak-lux reading`}
+            </h2>
+            <p className="text-xs text-[#4B5850]">
+              North-facing windows in Barcelona (41.39°N) receive maximum diffuse sky light around
+              solar noon ({peakWindow.timezoneLabel}). Log a reading once a month so NordFlora
+              tracks every plant&apos;s average daylight lux across seasons.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleDownloadMonthlyCalendarReminder}
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#EEF4F0] text-[#1F513B] hover:bg-[#1F513B] hover:text-white text-xs font-semibold inline-flex items-center gap-2 transition-colors whitespace-nowrap"
+            >
+              <CalendarPlus className="w-4 h-4" />
+              <span>Add Monthly Phone Alarm (.ics)</span>
+            </button>
+
+            {notifStatus !== 'unsupported' && notifStatus !== 'granted' && (
+              <button
+                type="button"
+                onClick={() => void handleEnableBrowserAlert()}
+                className="min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#18221D] text-xs font-medium inline-flex items-center gap-2 hover:bg-[#F0F1EC] whitespace-nowrap"
+              >
+                <Bell className="w-4 h-4 text-[#1F513B]" />
+                <span>Enable Alerts</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {reminderFeedback && (
+          <p className="text-xs text-[#1F513B] font-medium">{reminderFeedback}</p>
+        )}
+
+        {plants.length > 0 && duePlants.length > 0 && (
+          <div className="pt-3 border-t border-[#EEF0EA] flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[#4B5850] mr-1">
+              Due in {peakWindow.monthName} ({measuredCount}/{plants.length} done):
+            </span>
+            {duePlants.map((p) => {
+              const active = p.id === selectedPlantId;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSelectedPlantId(p.id)}
+                  className={`min-h-[36px] px-3 py-1 rounded-xl border text-xs font-medium transition-colors ${
+                    active
+                      ? 'border-[#1F513B] bg-[#1F513B] text-white'
+                      : 'border-[#D4D8CE] bg-[#FAFBF8] text-[#18221D] hover:bg-[#EEF4F0]'
+                  }`}
+                >
+                  {p.entryType === 'group' ? `${p.quantity}× ${p.name}` : p.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Live Sensor / Camera / Manual Meter */}
@@ -213,7 +389,13 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                   {luxValue}
                 </span>
                 <span className="text-sm font-medium text-[#4B5850]">
-                  lux ({luxSource === 'sensor' ? 'phone sensor' : luxSource === 'camera' ? 'camera estimate' : 'manual'})
+                  lux (
+                  {luxSource === 'sensor'
+                    ? 'phone sensor'
+                    : luxSource === 'camera'
+                      ? 'camera estimate'
+                      : 'manual'}
+                  )
                 </span>
               </div>
               <p className="text-xs text-[#1F513B] mt-1">{northLightZone}</p>
@@ -282,8 +464,8 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
             </div>
           )}
 
-          {/* Manual Lux Input & Quick North Zones */}
-          <form onSubmit={(e) => void handleSave(e)} className="space-y-4 pt-2 border-t border-[#EEF0EA]">
+          {/* Manual Lux Input, Time of Day, Note & Target Plant */}
+          <form onSubmit={(e) => void handleSave(e)} className="space-y-4 pt-3 border-t border-[#EEF0EA]">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="lux-manual-input" className="block text-xs font-medium text-[#4B5850] mb-1.5">
@@ -317,16 +499,97 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                   {plants.length === 0 ? (
                     <option value="">Add a plant first</option>
                   ) : (
-                    plants.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.entryType === 'group' ? `${p.quantity}× ${p.name}` : p.name} (currently{' '}
-                        {p.latestLux} lx)
-                      </option>
-                    ))
+                    plants.map((p) => {
+                      const stats = getPlantAverageLuxStats(p, undefined, now);
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {p.entryType === 'group' ? `${p.quantity}× ${p.name}` : p.name} (avg{' '}
+                          {stats.avgRecordedLux} lx · {stats.readingCount})
+                        </option>
+                      );
+                    })
                   )}
                 </select>
               </div>
             </div>
+
+            {/* Reading Time of Day Toggle */}
+            <div className="space-y-1.5">
+              <span className="block text-xs font-medium text-[#4B5850]">
+                Measurement Time Window
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-1 rounded-xl bg-[#EAECE5]">
+                <button
+                  type="button"
+                  onClick={() => setReadingPeriod('peak_noon')}
+                  className={`min-h-[40px] px-3 rounded-lg text-xs font-medium transition-colors ${
+                    readingPeriod === 'peak_noon'
+                      ? 'bg-white text-[#18221D] shadow-xs'
+                      : 'text-[#4B5850] hover:text-[#18221D]'
+                  }`}
+                >
+                  Barcelona Peak Daylight (~{peakWindow.peakTimeLabel})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReadingPeriod('general')}
+                  className={`min-h-[40px] px-3 rounded-lg text-xs font-medium transition-colors ${
+                    readingPeriod === 'general'
+                      ? 'bg-white text-[#18221D] shadow-xs'
+                      : 'text-[#4B5850] hover:text-[#18221D]'
+                  }`}
+                >
+                  Other / General Time
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="lux-note" className="block text-xs font-medium text-[#4B5850] mb-1.5">
+                Sky &amp; Window Note (optional)
+              </label>
+              <input
+                id="lux-note"
+                type="text"
+                maxLength={140}
+                value={noteInput}
+                onChange={(e) => setNoteInput(e.target.value)}
+                placeholder="e.g. Clear sky at 12:50 CET, blinds fully open"
+                className="w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm text-[#18221D]"
+              />
+            </div>
+
+            {/* Live Average Lux Calculation Preview */}
+            {selectedPlant && selectedStats && (
+              <div className="rounded-xl bg-[#FAFBF8] border border-[#EEF0EA] px-4 py-3 grid grid-cols-3 gap-3 text-xs">
+                <div>
+                  <span className="text-[#4B5850] block">Current Average</span>
+                  <span className="font-mono tabular-nums font-semibold text-[#18221D] text-sm">
+                    {selectedStats.avgRecordedLux} lx
+                  </span>
+                  <span className="text-[11px] text-[#4B5850] block">
+                    {selectedStats.readingCount}{' '}
+                    {selectedStats.readingCount === 1 ? 'reading' : 'readings'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[#4B5850] block">New Average</span>
+                  <span className="font-mono tabular-nums font-semibold text-[#1F513B] text-sm">
+                    {previewNewAvg} lx
+                  </span>
+                  <span className="text-[11px] text-[#4B5850] block">
+                    {selectedStats.readingCount + 1} readings
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[#4B5850] block">Est. Full-Day Mean</span>
+                  <span className="font-mono tabular-nums font-semibold text-[#18221D] text-sm">
+                    ~{Math.round(previewNewAvg * 0.62)} lx
+                  </span>
+                  <span className="text-[11px] text-[#4B5850] block">North diffuse factor</span>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               {savedFeedback ? (
@@ -336,7 +599,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                 </span>
               ) : (
                 <span className="text-xs text-[#4B5850]">
-                  Updating lux recalculates that plant&apos;s watering schedule automatically.
+                  Updates this plant&apos;s average daylight lux &amp; watering schedule.
                 </span>
               )}
 
@@ -351,38 +614,95 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
           </form>
         </section>
 
-        {/* Barcelona North-Facing Window Reference Guide */}
-        <aside className="lg:col-span-5 rounded-2xl bg-white border border-[#E4E6DF] p-5 space-y-4">
-          <div>
-            <h2 className="text-base font-semibold text-[#18221D]">
-              North-Facing Barcelona Lux Zones
-            </h2>
-            <p className="text-xs text-[#4B5850] mt-1 leading-relaxed">
-              Typical midday values in Barcelona (41.39°N) depending on distance from north glass
-              and neighboring Eixample/Gràcia facade reflection.
-            </p>
-          </div>
+        {/* Right Column: Per-Plant Average Daylight Lux + Barcelona Reference Guide */}
+        <aside className="lg:col-span-5 space-y-5">
+          {plants.length > 0 && (
+            <div className="rounded-2xl bg-white border border-[#E4E6DF] p-5 space-y-3">
+              <div>
+                <h2 className="text-base font-semibold text-[#18221D]">
+                  Average Daylight Lux by Plant
+                </h2>
+                <p className="text-xs text-[#4B5850] mt-0.5">
+                  Arithmetic mean of all readings logged per plant, plus estimated full-day north
+                  skylight average.
+                </p>
+              </div>
 
-          <div className="divide-y divide-[#EEF0EA]">
-            {LUX_REFERENCE_ZONES.map((zone) => (
-              <button
-                key={zone.label}
-                type="button"
-                onClick={() => {
-                  setLuxValue(zone.presetLux);
-                  setLuxSource('manual');
-                }}
-                className="w-full py-3 flex items-center justify-between gap-3 text-left hover:bg-[#FAFBF8] px-2 rounded-xl transition-colors"
-              >
-                <div>
-                  <p className="text-sm font-medium text-[#18221D]">{zone.label}</p>
-                  <p className="text-xs text-[#4B5850] font-mono tabular-nums">{zone.range}</p>
-                </div>
-                <span className="text-xs font-medium text-[#1F513B] whitespace-nowrap">
-                  Use {zone.presetLux} lx
-                </span>
-              </button>
-            ))}
+              <div className="divide-y divide-[#EEF0EA]">
+                {plants.map((p) => {
+                  const stats = getPlantAverageLuxStats(p, undefined, now);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedPlantId(p.id)}
+                      className={`w-full py-2.5 px-2 rounded-xl flex items-center justify-between gap-3 text-left transition-colors ${
+                        p.id === selectedPlantId ? 'bg-[#EEF4F0]/60' : 'hover:bg-[#FAFBF8]'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[#18221D] truncate">
+                          {p.entryType === 'group' ? `${p.quantity}× ${p.name}` : p.name}
+                        </p>
+                        <p className="text-[11px] text-[#4B5850]">
+                          {stats.readingCount}{' '}
+                          {stats.readingCount === 1 ? 'reading' : 'readings'} ·{' '}
+                          {stats.dueForMonthlyLux ? (
+                            <span className="text-[#B45309] font-medium">
+                              Due in {peakWindow.monthName}
+                            </span>
+                          ) : (
+                            <span className="text-[#1F513B]">Logged this month</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-sm font-semibold font-mono tabular-nums text-[#18221D] block">
+                          {stats.avgRecordedLux} lx avg
+                        </span>
+                        <span className="text-[11px] font-mono tabular-nums text-[#4B5850] block">
+                          ~{stats.estimatedFullDayLux} lx day
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-white border border-[#E4E6DF] p-5 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-[#18221D]">
+                North-Facing Barcelona Lux Zones
+              </h2>
+              <p className="text-xs text-[#4B5850] mt-1 leading-relaxed">
+                Typical midday values in Barcelona (41.39°N) depending on distance from north glass
+                and neighboring Eixample/Gràcia facade reflection.
+              </p>
+            </div>
+
+            <div className="divide-y divide-[#EEF0EA]">
+              {LUX_REFERENCE_ZONES.map((zone) => (
+                <button
+                  key={zone.label}
+                  type="button"
+                  onClick={() => {
+                    setLuxValue(zone.presetLux);
+                    setLuxSource('manual');
+                  }}
+                  className="w-full py-3 flex items-center justify-between gap-3 text-left hover:bg-[#FAFBF8] px-2 rounded-xl transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-[#18221D]">{zone.label}</p>
+                    <p className="text-xs text-[#4B5850] font-mono tabular-nums">{zone.range}</p>
+                  </div>
+                  <span className="text-xs font-medium text-[#1F513B] whitespace-nowrap">
+                    Use {zone.presetLux} lx
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </aside>
       </div>

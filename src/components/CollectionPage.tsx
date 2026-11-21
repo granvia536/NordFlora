@@ -13,6 +13,7 @@ import {
   calculateWateringSchedule,
   formatDueSummary,
   getCurrentMonthKey,
+  getPlantAverageLuxStats,
 } from '../lib/botanicalEngine';
 import {MonthlyTemp, PlantRecord} from '../types';
 
@@ -217,7 +218,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 to-transparent pointer-events-none" />
                   <div className="absolute bottom-3 left-3.5 right-3.5 flex items-end justify-between text-white text-xs">
                     <span className="font-mono tabular-nums font-medium">
-                      {plant.latestLux} lux · {calc.lightAssessment}
+                      {Math.round(plant.avgLux ?? plant.latestLux)} lux avg · {calc.lightAssessment}
                     </span>
                     {plant.entryType === 'group' && (
                       <span className="font-medium">Group of {plant.quantity}</span>
@@ -238,12 +239,20 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
                         ? ` · ${plant.botanicalName}`
                         : ''}
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-[#4B5850] pt-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[#4B5850] pt-1">
                       <span className="capitalize">{plant.potSize} {plant.potMaterial}</span>
                       <span aria-hidden="true">·</span>
                       <span className="font-mono tabular-nums">
                         Every {calc.adjustedIntervalDays}d
                       </span>
+                      {getPlantAverageLuxStats(plant, undefined, now).dueForMonthlyLux && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-[#B45309] font-medium">
+                            Monthly lux due
+                          </span>
+                        </>
+                      )}
                     </div>
                     {plant.careDetails && (
                       <p className="text-xs text-[#4B5850] line-clamp-2 pt-1.5 leading-relaxed">

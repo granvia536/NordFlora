@@ -34,6 +34,11 @@ import {
   updatePlantDetails,
   updatePlantPhotoAndCare,
 } from './lib/firestoreService';
+import {
+  getBarcelonaPeakWindow,
+  getCurrentMonthKey,
+  getPlantAverageLuxStats,
+} from './lib/botanicalEngine';
 import {AppView, LuxSource, MonthlyTemp, PlantLookupResult, PlantRecord} from './types';
 
 function getInitialView(): AppView {
@@ -82,6 +87,39 @@ const MainApp: React.FC = () => {
       unsubTemps();
     };
   }, [authReady, user]);
+
+  useEffect(() => {
+    if (!user || plants.length === 0 || typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+
+    const now = new Date();
+    const monthKey = getCurrentMonthKey(now);
+    const sessionKey = `nordflora_lux_notified_${monthKey}`;
+    try {
+      if (window.sessionStorage.getItem(sessionKey)) return;
+    } catch {
+      // ignore storage errors
+    }
+
+    const duePlants = plants.filter(
+      (p) => getPlantAverageLuxStats(p, undefined, now).dueForMonthlyLux,
+    );
+    if (duePlants.length === 0) return;
+
+    const peak = getBarcelonaPeakWindow(now);
+    try {
+      window.sessionStorage.setItem(sessionKey, '1');
+    } catch {
+      // ignore
+    }
+
+    new Notification(`NordFlora ${peak.monthName} Lux Check`, {
+      body: `${duePlants.length} ${
+        duePlants.length === 1 ? 'plant needs' : 'plants need'
+      } a lux reading around Barcelona solar noon (${peak.timeRangeLabel}).`,
+      icon: '/pwa-192x192.png',
+    });
+  }, [user, plants]);
 
   const navigateTo = (nextView: AppView) => {
     setView(nextView);
@@ -158,10 +196,13 @@ const MainApp: React.FC = () => {
     plantId: string,
     luxValue: number,
     source: LuxSource,
+    readingPeriod: 'peak_noon' | 'general',
     note?: string,
   ) => {
     if (!user) return;
-    await recordPlantLux(user.uid, plantId, luxValue, source, note);
+    const targetPlant = plants.find((p) => p.id === plantId);
+    if (!targetPlant) return;
+    await recordPlantLux(user.uid, targetPlant, luxValue, source, readingPeriod, note);
   };
 
   const handleSaveMonthlyTemp = async (
@@ -347,7 +388,10 @@ const MainApp: React.FC = () => {
               setFormOpen(true);
             }}
             onOpenClimate={() => navigateTo('climate')}
-            onOpenLux={() => navigateTo('lux')}
+            onOpenLux={(targetPlantId) => {
+              if (targetPlantId) setLuxTargetPlantId(targetPlantId);
+              navigateTo('lux');
+            }}
           />
         )}
 

@@ -14,7 +14,9 @@ import {
   BARCELONA_MONTHLY_BASELINE,
   calculateWateringSchedule,
   formatDueSummary,
+  getBarcelonaPeakWindow,
   getCurrentMonthKey,
+  getPlantAverageLuxStats,
 } from '../lib/botanicalEngine';
 import {MonthlyTemp, PlantRecord, WateringCalculation} from '../types';
 import {PWAInstallButton} from './PWAInstallButton';
@@ -32,7 +34,7 @@ interface WidgetHomeViewProps {
   onWaterPlant: (plant: PlantRecord) => Promise<void>;
   onAddPlant: () => void;
   onOpenClimate: () => void;
-  onOpenLux: () => void;
+  onOpenLux: (targetPlantId?: string) => void;
 }
 
 export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
@@ -68,6 +70,16 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
   const dueTodayOrOverdue = calculated.filter((item) => item.calc.daysUntilWater <= 0);
   const nextUpcoming = calculated.find((item) => item.calc.daysUntilWater > 0);
   const totalPlantUnits = plants.reduce((acc, p) => acc + p.quantity, 0);
+  const peakWindow = getBarcelonaPeakWindow(now);
+  const dueLuxPlants = plants.filter(
+    (p) => getPlantAverageLuxStats(p, undefined, now).dueForMonthlyLux,
+  );
+  const collectionAvgLux =
+    plants.length > 0
+      ? Math.round(
+          plants.reduce((sum, p) => sum + (p.avgLux ?? p.latestLux), 0) / plants.length,
+        )
+      : 0;
 
   const todayFormatted = now.toLocaleDateString('en-GB', {
     weekday: 'short',
@@ -276,7 +288,7 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
                               <span className="truncate">{plant.speciesName}</span>
                               <span aria-hidden="true">·</span>
                               <span className="font-mono tabular-nums shrink-0">
-                                {plant.latestLux} lx
+                                {Math.round(plant.avgLux ?? plant.latestLux)} lx avg
                               </span>
                             </>
                           )}
@@ -396,24 +408,45 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
 
               <button
                 type="button"
-                onClick={onOpenLux}
+                onClick={() => onOpenLux(dueLuxPlants[0]?.id)}
                 className="text-left p-3.5 rounded-xl bg-[#F7F7F4] hover:bg-[#EFF1EA] transition-colors"
               >
                 <div className="flex items-center gap-1.5 text-xs text-[#4B5850]">
                   <Sun className="w-3.5 h-3.5 text-[#B45309]" />
-                  <span>Avg Plant Light</span>
+                  <span>Avg Daylight Lux</span>
                 </div>
                 <p className="text-xl font-semibold font-mono tabular-nums text-[#18221D] mt-1">
-                  {plants.length > 0
-                    ? Math.round(
-                        plants.reduce((sum, p) => sum + p.latestLux, 0) / plants.length,
-                      )
-                    : 0}{' '}
-                  lx
+                  {collectionAvgLux} lx
                 </p>
-                <p className="text-[11px] text-[#4B5850] mt-0.5">Tap to measure lux</p>
+                <p className="text-[11px] text-[#4B5850] mt-0.5">
+                  Peak {peakWindow.peakTimeLabel}
+                </p>
               </button>
             </div>
+
+            {plants.length > 0 && (
+              <div className="pt-3 border-t border-[#EEF0EA] flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-[#18221D]">
+                    {dueLuxPlants.length > 0
+                      ? `${dueLuxPlants.length} ${
+                          dueLuxPlants.length === 1 ? 'plant due' : 'plants due'
+                        } for ${peakWindow.monthName} lux check`
+                      : `All plants measured in ${peakWindow.monthName}`}
+                  </p>
+                  <p className="text-[11px] text-[#4B5850]">
+                    Strongest Barcelona light: {peakWindow.timeRangeLabel}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenLux(dueLuxPlants[0]?.id)}
+                  className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#EEF4F0] text-[#1F513B] hover:bg-[#1F513B] hover:text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+                >
+                  {dueLuxPlants.length > 0 ? 'Log Peak Lux' : 'Lux Log'}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Quick Upcoming Preview */}

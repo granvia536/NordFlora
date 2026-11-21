@@ -42,7 +42,8 @@ service cloud.firestore {
         'id', 'ownerId', 'name', 'speciesId', 'speciesName', 'botanicalName',
         'careDetails', 'idealLuxMin', 'idealLuxMax', 'sourceTitle', 'sourceUrl',
         'entryType', 'quantity', 'potMaterial', 'potSize', 'baseWaterDays',
-        'latestLux', 'luxSource', 'lastLuxAt', 'lastWateredAt', 'notes',
+        'latestLux', 'avgLux', 'luxReadingCount', 'lastLuxMonth',
+        'luxSource', 'lastLuxAt', 'lastWateredAt', 'notes',
         'photoDataUrl', 'createdAt', 'updatedAt'
       ])
       && data.id is string && data.id == plantId && isValidId(data.id)
@@ -65,6 +66,9 @@ service cloud.firestore {
       && data.potSize is string && data.potSize in ['small', 'medium', 'large']
       && data.baseWaterDays is number && data.baseWaterDays >= 1 && data.baseWaterDays <= 90
       && data.latestLux is number && data.latestLux >= 0 && data.latestLux <= 150000
+      && (!('avgLux' in data) || (data.avgLux is number && data.avgLux >= 0 && data.avgLux <= 150000))
+      && (!('luxReadingCount' in data) || (data.luxReadingCount is int && data.luxReadingCount >= 0 && data.luxReadingCount <= 10000))
+      && (!('lastLuxMonth' in data) || (data.lastLuxMonth is string && data.lastLuxMonth.size() <= 10 && (data.lastLuxMonth == '' || data.lastLuxMonth.matches('^[0-9]{4}-[0-9]{2}$'))))
       && data.luxSource is string && data.luxSource in ['sensor', 'camera', 'manual']
       && data.lastLuxAt is string && data.lastLuxAt.size() >= 10 && data.lastLuxAt.size() <= 40
       && data.lastWateredAt is string && data.lastWateredAt.size() >= 10 && data.lastWateredAt.size() <= 40
@@ -81,7 +85,7 @@ service cloud.firestore {
       ])
       && data.keys().hasOnly([
         'id', 'ownerId', 'plantId', 'logType', 'luxValue', 'luxSource',
-        'note', 'recordedAt', 'createdAt'
+        'readingPeriod', 'note', 'recordedAt', 'createdAt'
       ])
       && data.id is string && data.id == logId && isValidId(data.id)
       && data.ownerId is string && data.ownerId == userId && data.ownerId == request.auth.uid && data.ownerId.size() <= 128
@@ -89,6 +93,7 @@ service cloud.firestore {
       && data.logType is string && data.logType in ['water', 'lux']
       && data.luxValue is number && data.luxValue >= 0 && data.luxValue <= 150000
       && data.luxSource is string && data.luxSource in ['sensor', 'camera', 'manual', 'none']
+      && (!('readingPeriod' in data) || (data.readingPeriod is string && data.readingPeriod in ['peak_noon', 'general', 'none']))
       && data.note is string && data.note.size() <= 160
       && data.recordedAt is string && data.recordedAt.size() >= 10 && data.recordedAt.size() <= 40
       && data.createdAt is timestamp;
@@ -137,8 +142,11 @@ service cloud.firestore {
         && (
           // Action 1: Quick Water Now
           incoming().diff(existing()).affectedKeys().hasOnly(['lastWateredAt', 'updatedAt']) ||
-          // Action 2: Record Lux Measurement
-          incoming().diff(existing()).affectedKeys().hasOnly(['latestLux', 'luxSource', 'lastLuxAt', 'updatedAt']) ||
+          // Action 2: Record Lux Measurement & Rolling Average
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'latestLux', 'avgLux', 'luxReadingCount', 'lastLuxMonth',
+            'luxSource', 'lastLuxAt', 'updatedAt'
+          ]) ||
           // Action 3: Update Photo & Web Lookup Care Details
           incoming().diff(existing()).affectedKeys().hasOnly([
             'photoDataUrl', 'speciesId', 'speciesName', 'botanicalName',
@@ -150,7 +158,8 @@ service cloud.firestore {
             'name', 'speciesId', 'speciesName', 'botanicalName', 'careDetails',
             'idealLuxMin', 'idealLuxMax', 'sourceTitle', 'sourceUrl',
             'entryType', 'quantity', 'potMaterial', 'potSize', 'baseWaterDays',
-            'latestLux', 'luxSource', 'lastLuxAt', 'lastWateredAt', 'notes',
+            'latestLux', 'avgLux', 'luxReadingCount', 'lastLuxMonth',
+            'luxSource', 'lastLuxAt', 'lastWateredAt', 'notes',
             'photoDataUrl', 'updatedAt'
           ])
         );

@@ -2,6 +2,7 @@ export type EntryType = 'individual' | 'group';
 export type PotMaterial = 'terracotta' | 'ceramic' | 'plastic';
 export type PotSize = 'small' | 'medium' | 'large';
 export type LuxSource = 'sensor' | 'camera' | 'manual';
+export type ReadingPeriod = 'peak_noon' | 'general' | 'none';
 export type HeatingOrAc = 'none' | 'heating' | 'ac' | 'natural_vent';
 export type AppView = 'widget' | 'collection' | 'climate' | 'lux';
 
@@ -23,6 +24,9 @@ export interface PlantRecord {
   potSize: PotSize;
   baseWaterDays: number;
   latestLux: number;
+  avgLux?: number;
+  luxReadingCount?: number;
+  lastLuxMonth?: string;
   luxSource: LuxSource;
   lastLuxAt: string;
   lastWateredAt: string;
@@ -52,6 +56,7 @@ export interface PlantLog {
   logType: 'water' | 'lux';
   luxValue: number;
   luxSource: LuxSource | 'none';
+  readingPeriod?: ReadingPeriod;
   note: string;
   recordedAt: string;
   createdAt?: unknown;
