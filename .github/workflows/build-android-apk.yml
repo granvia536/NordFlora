@@ -38,8 +38,43 @@ jobs:
       - name: Install Android platform and build tools
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Ensure Capacitor Android binary assets
+        run: |
+          python3 - <<'PY'
+          import tarfile
+          from pathlib import Path
+
+          archive = Path("node_modules/@capacitor/cli/assets/android-template.tar.gz")
+          android_dir = Path("android")
+          if archive.exists():
+              with tarfile.open(archive, "r:gz") as tf:
+                  for member in tf.getmembers():
+                      if not member.isfile():
+                          continue
+                      rel = Path(member.name)
+                      if rel.suffix in {".jar", ".png"} or rel.name in {"gradlew", "gradlew.bat"}:
+                          target = android_dir / rel
+                          needs_restore = (not target.exists()) or target.stat().st_size == 0
+                          if not needs_restore and rel.suffix == ".png":
+                              needs_restore = target.read_bytes()[:8] != b"\x89PNG\r\n\x1a\n"
+                          if not needs_restore and rel.suffix == ".jar":
+                              needs_restore = target.read_bytes()[:2] != b"PK"
+                          if needs_restore:
+                              target.parent.mkdir(parents=True, exist_ok=True)
+                              with tf.extractfile(member) as src:
+                                  target.write_bytes(src.read())
+                              if rel.name == "gradlew":
+                                  target.chmod(0o755)
+                              print(f"Restored template binary: {target}")
+          PY
 
       - name: Configure optional google-services.json
         env:
@@ -69,10 +104,9 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace --no-daemon
           echo "===== Android debug signing certificate (add this SHA-1 to Firebase) ====="
-          ./gradlew signingReport
+          gradle signingReport --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
