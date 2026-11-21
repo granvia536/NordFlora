@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NordFlora</string>
+    <string name="title_activity_main">NordFlora</string>
+    <string name="package_name">com.nordflora.app</string>
+    <string name="custom_url_scheme">com.nordflora.app</string>
+    <string name="widget_description">Shows plants that need water today and opens your full Barcelona north-window schedules.</string>
+</resources>

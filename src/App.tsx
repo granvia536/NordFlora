@@ -40,6 +40,7 @@ import {
   getPlantAverageLuxStats,
 } from './lib/botanicalEngine';
 import {AppView, LuxSource, MonthlyTemp, PlantLookupResult, PlantRecord} from './types';
+import {syncNordFloraWidget} from './lib/nativeWidget';
 
 function getInitialView(): AppView {
   if (typeof window === 'undefined') return 'widget';
@@ -158,6 +159,11 @@ const MainApp: React.FC = () => {
       setSigningIn(false);
     }
   };
+
+  useEffect(() => {
+    if (!authReady) return;
+    void syncNordFloraWidget(plants, monthlyTemps);
+  }, [authReady, plants, monthlyTemps]);
 
   const handleSavePlant = async (input: SavePlantInput) => {
     if (!user) return;

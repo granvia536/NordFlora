@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_call:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-android:
@@ -37,359 +38,33 @@ jobs:
       - name: Install Android platform and build tools
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Install project and Capacitor dependencies
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Configure optional google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          npm install --no-save --legacy-peer-deps --no-audit --no-fund @capacitor/core@8.6.2 @capacitor/cli@8.6.2 @capacitor/android@8.6.2 @capacitor-firebase/authentication@8.6.0
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "Installed android/app/google-services.json from GitHub Secret."
+          elif [ -f "google-services.json" ]; then
+            cp google-services.json android/app/google-services.json
+            echo "Installed android/app/google-services.json from repository root."
+          else
+            echo "NOTE: google-services.json not found. Debug APK will still build; add google-services.json (or GOOGLE_SERVICES_JSON secret) for native Google sign-in."
+          fi
 
-      - name: Create Capacitor configuration and widget bridge
+      - name: Type-check and build web app
         run: |
-          cat > capacitor.config.ts <<'EOF'
-          import type {CapacitorConfig} from '@capacitor/cli';
-          const config: CapacitorConfig = {
-            appId: 'com.nordflora.app',
-            appName: 'NordFlora',
-            webDir: 'dist',
-            plugins: {
-              FirebaseAuthentication: {
-                providers: ['google.com'],
-                skipNativeAuth: true,
-              },
-            },
-          };
-          export default config;
-          EOF
+          npm run lint
+          npm run build
 
-          mkdir -p src/lib
-          cat > src/lib/nativeWidget.ts <<'EOF'
-          import {Capacitor, registerPlugin} from '@capacitor/core';
-          import {calculateWateringSchedule, formatDueSummary} from './botanicalEngine';
-          import type {MonthlyTemp, PlantRecord} from '../types';
-
-          const PlantWidget = registerPlugin<{
-            sync(options: {data: string}): Promise<void>;
-          }>('PlantWidget');
-
-          export async function syncNordFloraWidget(
-            plants: PlantRecord[],
-            monthlyTemps: MonthlyTemp[],
-          ): Promise<void> {
-            if (!Capacitor.isNativePlatform()) return;
-
-            const scheduled = plants
-              .map((plant) => ({
-                plant,
-                calc: calculateWateringSchedule(plant, monthlyTemps),
-              }))
-              .sort((a, b) => a.calc.daysUntilWater - b.calc.daysUntilWater);
-
-            const due = scheduled.filter(({calc}) => calc.daysUntilWater <= 0);
-            const next = scheduled.find(({calc}) => calc.daysUntilWater > 0);
-
-            const headline =
-              plants.length === 0
-                ? 'No plants added yet'
-                : due.length > 0
-                  ? `Water ${due.length} ${due.length === 1 ? 'plant' : 'plants'}`
-                  : 'Nothing needs water today';
-
-            const lines = due.slice(0, 3).map(
-              ({plant, calc}) =>
-                `${plant.entryType === 'group' ? `${plant.quantity}× ` : ''}${plant.name} · ${formatDueSummary(calc.daysUntilWater)}`,
-            );
-
-            if (due.length === 0 && next) {
-              lines.push(`Next: ${next.plant.name} · ${formatDueSummary(next.calc.daysUntilWater)}`);
-            } else if (due.length > 3) {
-              lines.push(`+${due.length - 3} more`);
-            }
-
-            const payload = {
-              headline,
-              detail: `${plants.length} ${plants.length === 1 ? 'entry' : 'entries'} · ${new Date().toLocaleDateString('en-GB', {day: 'numeric', month: 'short'})}`,
-              lines,
-            };
-
-            try {
-              await PlantWidget.sync({data: JSON.stringify(payload)});
-            } catch (error) {
-              console.warn('Could not update the Android watering widget:', error);
-            }
-          }
-          EOF
-
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("src/App.tsx")
-          source = path.read_text()
-          import_line = "import {AppView, LuxSource, MonthlyTemp, PlantLookupResult, PlantRecord} from './types';"
-          new_import = "import {syncNordFloraWidget} from './lib/nativeWidget';"
-          if import_line not in source:
-              raise SystemExit("Expected App.tsx types import not found; refusing to patch.")
-          if new_import not in source:
-              source = source.replace(import_line, import_line + "\n" + new_import, 1)
-          anchor = "  const handleSavePlant = async (input: SavePlantInput) => {"
-          effect = """  useEffect(() => {
-              if (!authReady) return;
-              void syncNordFloraWidget(plants, monthlyTemps);
-            }, [authReady, plants, monthlyTemps]);
-
-          """
-          if "void syncNordFloraWidget(plants, monthlyTemps)" not in source:
-              if anchor not in source:
-                  raise SystemExit("Expected App.tsx insertion point not found; refusing to patch.")
-              source = source.replace(anchor, effect + anchor, 1)
-          path.write_text(source)
-          PY
-
-      - name: Build web app
-        run: npm run build
-
-      - name: Generate Android project
-        run: npx cap add android
-
-      - name: Configure native Google authentication
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          variables = Path("android/variables.gradle")
-          source = variables.read_text()
-          if "rgcfaIncludeGoogle" not in source:
-              source = source.replace("ext {", "ext {\n    rgcfaIncludeGoogle = true\n    androidxCredentialsVersion = '1.3.0'", 1)
-          variables.write_text(source)
-
-          # The Firebase Android app configuration is added after registering
-          # com.nordflora.app in Firebase. Keep the web build usable before then.
-          config = Path("google-services.json")
-          if config.exists():
-              Path("android/app/google-services.json").write_text(config.read_text())
-
-              root_gradle = Path("android/build.gradle")
-              root = root_gradle.read_text()
-              if "com.google.gms:google-services" not in root:
-                  marker = "dependencies {"
-                  if marker not in root:
-                      raise SystemExit("Could not find buildscript dependencies in android/build.gradle")
-                  root = root.replace(marker, marker + "\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
-                  root_gradle.write_text(root)
-
-              app_gradle = Path("android/app/build.gradle")
-              app = app_gradle.read_text()
-              if "com.google.gms.google-services" not in app:
-                  marker = "apply plugin: 'com.android.application'"
-                  if marker not in app:
-                      raise SystemExit("Could not find Android application plugin in android/app/build.gradle")
-                  app = app.replace(marker, marker + "\napply plugin: 'com.google.gms.google-services'", 1)
-                  app_gradle.write_text(app)
-              print("Firebase Android configuration found and installed.")
-          else:
-              print("WARNING: google-services.json is not yet in the repository. Native Google sign-in will need Firebase Android app registration before final use.")
-          PY
-
-      - name: Sync Capacitor
+      - name: Sync Capacitor Android project
+        env:
+          CI: 'true'
+          CAPACITOR_TELEMETRY: 'false'
         run: npx cap sync android
-
-      - name: Add native Android home-screen widget
-        run: |
-          JAVA_DIR="android/app/src/main/java/com/nordflora/app"
-          RES_DIR="android/app/src/main/res"
-          mkdir -p "$JAVA_DIR" "$RES_DIR/layout" "$RES_DIR/xml"
-
-          cat > "$JAVA_DIR/MainActivity.java" <<'EOF'
-          package com.nordflora.app;
-
-          import android.os.Bundle;
-          import com.getcapacitor.BridgeActivity;
-
-          public class MainActivity extends BridgeActivity {
-            @Override
-            public void onCreate(Bundle savedInstanceState) {
-              registerPlugin(PlantWidgetPlugin.class);
-              super.onCreate(savedInstanceState);
-            }
-          }
-          EOF
-
-          cat > "$JAVA_DIR/PlantWidgetPlugin.java" <<'EOF'
-          package com.nordflora.app;
-
-          import android.appwidget.AppWidgetManager;
-          import android.content.ComponentName;
-          import android.content.Context;
-          import android.content.SharedPreferences;
-          import com.getcapacitor.JSObject;
-          import com.getcapacitor.Plugin;
-          import com.getcapacitor.PluginCall;
-          import com.getcapacitor.PluginMethod;
-          import com.getcapacitor.annotation.CapacitorPlugin;
-
-          @CapacitorPlugin(name = "PlantWidget")
-          public class PlantWidgetPlugin extends Plugin {
-            @PluginMethod
-            public void sync(PluginCall call) {
-              String data = call.getString("data", "{}");
-              Context context = getContext();
-              SharedPreferences prefs = context.getSharedPreferences("NordFloraWidget", Context.MODE_PRIVATE);
-              prefs.edit().putString("widget_data", data).apply();
-
-              AppWidgetManager manager = AppWidgetManager.getInstance(context);
-              ComponentName provider = new ComponentName(context, NordFloraWidgetProvider.class);
-              int[] ids = manager.getAppWidgetIds(provider);
-              if (ids != null && ids.length > 0) {
-                new NordFloraWidgetProvider().onUpdate(context, manager, ids);
-              }
-
-              JSObject result = new JSObject();
-              result.put("updated", true);
-              call.resolve(result);
-            }
-          }
-          EOF
-
-          cat > "$JAVA_DIR/NordFloraWidgetProvider.java" <<'EOF'
-          package com.nordflora.app;
-
-          import android.app.PendingIntent;
-          import android.appwidget.AppWidgetManager;
-          import android.appwidget.AppWidgetProvider;
-          import android.content.Context;
-          import android.content.Intent;
-          import android.content.SharedPreferences;
-          import android.widget.RemoteViews;
-          import org.json.JSONArray;
-          import org.json.JSONObject;
-
-          public class NordFloraWidgetProvider extends AppWidgetProvider {
-            @Override
-            public void onUpdate(Context context, AppWidgetManager manager, int[] appWidgetIds) {
-              SharedPreferences prefs = context.getSharedPreferences("NordFloraWidget", Context.MODE_PRIVATE);
-              String raw = prefs.getString("widget_data", "{}");
-              JSONObject data;
-              try {
-                data = new JSONObject(raw);
-              } catch (Exception ignored) {
-                data = new JSONObject();
-              }
-
-              String headline = data.optString("headline", "Open NordFlora to sync");
-              String detail = data.optString("detail", "Your watering schedule");
-              JSONArray lines = data.optJSONArray("lines");
-
-              for (int id : appWidgetIds) {
-                RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_nordflora);
-                views.setTextViewText(R.id.widget_title, "NordFlora");
-                views.setTextViewText(R.id.widget_headline, headline);
-                views.setTextViewText(R.id.widget_detail, detail);
-                views.setTextViewText(R.id.widget_line_1, lines != null && lines.length() > 0 ? lines.optString(0) : "Tap to open your plants");
-                views.setTextViewText(R.id.widget_line_2, lines != null && lines.length() > 1 ? lines.optString(1) : "");
-                views.setTextViewText(R.id.widget_line_3, lines != null && lines.length() > 2 ? lines.optString(2) : "");
-
-                Intent launch = new Intent(context, MainActivity.class);
-                PendingIntent pending = PendingIntent.getActivity(
-                  context, 0, launch,
-                  PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                );
-                views.setOnClickPendingIntent(R.id.widget_root, pending);
-                manager.updateAppWidget(id, views);
-              }
-            }
-          }
-          EOF
-
-          cat > "$RES_DIR/layout/widget_nordflora.xml" <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/widget_root"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:padding="14dp"
-              android:background="#F7F7F4">
-              <TextView
-                  android:id="@+id/widget_title"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:text="NordFlora"
-                  android:textColor="#1F513B"
-                  android:textSize="13sp"
-                  android:textStyle="bold" />
-              <TextView
-                  android:id="@+id/widget_headline"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:layout_marginTop="3dp"
-                  android:text="Open NordFlora to sync"
-                  android:textColor="#18221D"
-                  android:textSize="16sp"
-                  android:textStyle="bold"
-                  android:maxLines="1" />
-              <TextView
-                  android:id="@+id/widget_detail"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:text="Your watering schedule"
-                  android:textColor="#4B5850"
-                  android:textSize="10sp" />
-              <TextView
-                  android:id="@+id/widget_line_1"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:layout_marginTop="7dp"
-                  android:textColor="#18221D"
-                  android:textSize="12sp"
-                  android:maxLines="1" />
-              <TextView
-                  android:id="@+id/widget_line_2"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:textColor="#18221D"
-                  android:textSize="12sp"
-                  android:maxLines="1" />
-              <TextView
-                  android:id="@+id/widget_line_3"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:textColor="#18221D"
-                  android:textSize="12sp"
-                  android:maxLines="1" />
-          </LinearLayout>
-          EOF
-
-          cat > "$RES_DIR/xml/nordflora_widget_info.xml" <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-              android:minWidth="250dp"
-              android:minHeight="110dp"
-              android:targetCellWidth="4"
-              android:targetCellHeight="2"
-              android:updatePeriodMillis="1800000"
-              android:initialLayout="@layout/widget_nordflora"
-              android:resizeMode="horizontal|vertical"
-              android:widgetCategory="home_screen" />
-          EOF
-
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("android/app/src/main/AndroidManifest.xml")
-          manifest = path.read_text()
-          receiver = """
-              <receiver
-                  android:name="com.nordflora.app.NordFloraWidgetProvider"
-                  android:exported="true">
-                  <intent-filter>
-                      <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                  </intent-filter>
-                  <meta-data
-                      android:name="android.appwidget.provider"
-                      android:resource="@xml/nordflora_widget_info" />
-              </receiver>
-          """
-          if "NordFloraWidgetProvider" not in manifest:
-              if "</application>" not in manifest:
-                  raise SystemExit("AndroidManifest.xml has no application closing tag.")
-              manifest = manifest.replace("</application>", receiver + "\n    </application>")
-          path.write_text(manifest)
-          PY
 
       - name: Build debug APK
         working-directory: android
@@ -399,10 +74,16 @@ jobs:
           echo "===== Android debug signing certificate (add this SHA-1 to Firebase) ====="
           ./gradlew signingReport
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: NordFlora-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish APK to GitHub Release (on v* tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/debug/app-debug.apk
