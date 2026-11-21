@@ -12,6 +12,9 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        // Register the service worker manually in main.tsx on web only.
+        // A service worker can prevent Capacitor's native plugins from being injected.
+        injectRegister: null,
         includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
         manifest: {
           id: '/',
@@ -22,7 +25,7 @@ export default defineConfig(() => {
           theme_color: '#1F513B',
           background_color: '#F7F7F4',
           display: 'standalone',
-          orientation: 'portrait-primary',
+          orientation: 'portrait',
           start_url: '/?view=widget',
           scope: '/',
           shortcuts: [
