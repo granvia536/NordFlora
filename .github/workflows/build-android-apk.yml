@@ -24,6 +24,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -44,7 +47,7 @@ jobs:
           gradle-version: '8.14.3'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+        run: bun install --frozen-lockfile
 
       - name: Ensure Capacitor Android binary assets
         run: |
