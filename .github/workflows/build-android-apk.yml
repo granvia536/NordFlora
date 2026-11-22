@@ -139,6 +139,38 @@ jobs:
           gradle assembleDebug --stacktrace --no-daemon
           echo "===== Android debug signing certificate (add this SHA-1 to Firebase) ====="
           gradle signingReport --no-daemon
+          python3 - <<'PY'
+          import json, re, subprocess
+          from pathlib import Path
+
+          apk = Path("app/build/outputs/apk/debug/app-debug.apk")
+          gs_file = Path("app/google-services.json")
+          apk_sha1 = ""
+          if apk.exists():
+              out = subprocess.check_output(["keytool", "-printcert", "-jarfile", str(apk)], text=True, stderr=subprocess.STDOUT)
+              m = re.search(r"SHA1:\s*([0-9A-Fa-f:]+)", out)
+              if m:
+                  apk_sha1 = m.group(1).upper()
+                  print(f"APK signing SHA-1: {apk_sha1}")
+          if gs_file.exists():
+              try:
+                  gs = json.loads(gs_file.read_text())
+                  clients = gs.get("client", [])
+                  oauth = clients[0].get("oauth_client", []) if clients else []
+                  has_web = any(c.get("client_type") == 3 for c in oauth)
+                  hashes = []
+                  for c in oauth:
+                      h = c.get("android_info", {}).get("certificate_hash")
+                      if h:
+                          formatted = ":".join(h.upper()[i:i+2] for i in range(0, len(h), 2))
+                          hashes.append(formatted)
+                  print(f"google-services.json has Web Client ID (type 3): {has_web}")
+                  print(f"google-services.json Android SHA-1 entries: {hashes}")
+                  if apk_sha1 and apk_sha1 not in hashes:
+                      print(f"WARNING: APK SHA-1 ({apk_sha1}) is NOT listed in google-services.json. Add {apk_sha1} in Firebase Console -> omega-fusion-ngt36 -> com.nordflora.app!")
+              except Exception as exc:
+                  print(f"Could not inspect google-services.json: {exc}")
+          PY
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
