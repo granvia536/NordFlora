@@ -139,9 +139,29 @@ const MainApp: React.FC = () => {
       if (Capacitor.isNativePlatform()) {
         // Use the native Android Google account picker, then exchange its token
         // for a Firebase JS SDK session so Firestore continues using auth.currentUser.
-        const result = await FirebaseAuthentication.signInWithGoogle({
-          skipNativeAuth: true,
-        });
+        let result;
+        try {
+          result = await FirebaseAuthentication.signInWithGoogle({
+            skipNativeAuth: true,
+          });
+        } catch (cmErr) {
+          const cmMsg = cmErr instanceof Error ? cmErr.message : String(cmErr);
+          if (
+            /reauth/i.test(cmMsg) ||
+            /\[16\]/.test(cmMsg) ||
+            /credential/i.test(cmMsg) ||
+            /NoCredential/i.test(cmMsg)
+          ) {
+            // Clear stale Credential Manager state and fall back to classic Google Sign-In picker
+            await FirebaseAuthentication.signOut().catch(() => {});
+            result = await FirebaseAuthentication.signInWithGoogle({
+              skipNativeAuth: true,
+              useCredentialManager: false,
+            });
+          } else {
+            throw cmErr;
+          }
+        }
         const idToken = result.credential?.idToken;
         const accessToken = result.credential?.accessToken;
         if (!idToken) {
@@ -153,11 +173,32 @@ const MainApp: React.FC = () => {
         await signInWithPopup(auth, googleProvider);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Google sign-in was cancelled.';
-      setAuthError(message);
+      const raw = err instanceof Error ? err.message : 'Google sign-in was cancelled.';
+      if (
+        /not implemented/i.test(raw) ||
+        /FirebaseApp/i.test(raw) ||
+        /default_web_client_id/i.test(raw)
+      ) {
+        setAuthError(
+          'Google Sign-In in this APK needs google-services.json from Firebase Console (package com.nordflora.app + debug SHA-1) added to your GOOGLE_SERVICES_JSON GitHub secret before building.',
+        );
+      } else if (/reauth/i.test(raw) || /\[16\]/.test(raw) || /\b10:/.test(raw) || /12500/.test(raw)) {
+        setAuthError(
+          `${raw} — Make sure the latest SHA-1 from GitHub Actions "Build debug APK" is added to com.nordflora.app in Firebase Console (omega-fusion-ngt36), and re-download google-services.json into GOOGLE_SERVICES_JSON if you changed the Android app.`,
+        );
+      } else {
+        setAuthError(raw);
+      }
     } finally {
       setSigningIn(false);
     }
+  };
+
+  const handleSignOut = async () => {
+    if (Capacitor.isNativePlatform()) {
+      await FirebaseAuthentication.signOut().catch(() => {});
+    }
+    await signOut(auth);
   };
 
   useEffect(() => {
@@ -366,7 +407,7 @@ const MainApp: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => void signOut(auth)}
+              onClick={() => void handleSignOut()}
               title={`Sign out (${user.email ?? 'account'})`}
               aria-label="Sign out"
               className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl text-[#4B5850] hover:bg-[#F0F1EC] hover:text-[#18221D]"

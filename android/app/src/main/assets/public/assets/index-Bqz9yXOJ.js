@@ -23358,7 +23358,7 @@ var ProviderId;
 	ProviderId["PHONE"] = "phone";
 })(ProviderId || (ProviderId = {}));
 // node_modules/@capacitor-firebase/authentication/dist/esm/index.js
-var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-BAKhbrgl.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
+var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-Cca_i8uC.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
 // node_modules/lucide-react/dist/esm/shared/src/utils.js
 /**
 * @license lucide-react v0.546.0 - ISC
@@ -58606,18 +58606,36 @@ var MainApp = () => {
 		setAuthError(null);
 		try {
 			if (Capacitor.isNativePlatform()) {
-				const result = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true });
+				let result;
+				try {
+					result = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true });
+				} catch (cmErr) {
+					const cmMsg = cmErr instanceof Error ? cmErr.message : String(cmErr);
+					if (/reauth/i.test(cmMsg) || /\[16\]/.test(cmMsg) || /credential/i.test(cmMsg) || /NoCredential/i.test(cmMsg)) {
+						await FirebaseAuthentication.signOut().catch(() => {});
+						result = await FirebaseAuthentication.signInWithGoogle({
+							skipNativeAuth: true,
+							useCredentialManager: false
+						});
+					} else throw cmErr;
+				}
 				const idToken = result.credential?.idToken;
 				const accessToken = result.credential?.accessToken;
 				if (!idToken) throw new Error("Google sign-in did not return an ID token. Check the Android Firebase app and SHA-1 setup.");
 				await signInWithCredential(auth, GoogleAuthProvider.credential(idToken, accessToken));
 			} else await signInWithPopup(auth, googleProvider);
 		} catch (err) {
-			const message = err instanceof Error ? err.message : "Google sign-in was cancelled.";
-			setAuthError(message);
+			const raw = err instanceof Error ? err.message : "Google sign-in was cancelled.";
+			if (/not implemented/i.test(raw) || /FirebaseApp/i.test(raw) || /default_web_client_id/i.test(raw)) setAuthError("Google Sign-In in this APK needs google-services.json from Firebase Console (package com.nordflora.app + debug SHA-1) added to your GOOGLE_SERVICES_JSON GitHub secret before building.");
+			else if (/reauth/i.test(raw) || /\[16\]/.test(raw) || /\b10:/.test(raw) || /12500/.test(raw)) setAuthError(`${raw} — Make sure the latest SHA-1 from GitHub Actions "Build debug APK" is added to com.nordflora.app in Firebase Console (omega-fusion-ngt36), and re-download google-services.json into GOOGLE_SERVICES_JSON if you changed the Android app.`);
+			else setAuthError(raw);
 		} finally {
 			setSigningIn(false);
 		}
+	};
+	const handleSignOut = async () => {
+		if (Capacitor.isNativePlatform()) await FirebaseAuthentication.signOut().catch(() => {});
+		await signOut(auth);
 	};
 	(0, import_react.useEffect)(() => {
 		if (!authReady) return;
@@ -58804,7 +58822,7 @@ var MainApp = () => {
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Add Plant" })]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 								type: "button",
-								onClick: () => void signOut(auth),
+								onClick: () => void handleSignOut(),
 								title: `Sign out (${user.email ?? "account"})`,
 								"aria-label": "Sign out",
 								className: "min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl text-[#4B5850] hover:bg-[#F0F1EC] hover:text-[#18221D]",
