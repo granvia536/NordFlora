@@ -6,6 +6,7 @@ import {
   Check,
   Clock,
   Gauge,
+  ImagePlus,
   Sun,
 } from 'lucide-react';
 import {
@@ -67,6 +68,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const duePlants = useMemo(
     () =>
@@ -135,10 +137,75 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
     }
   };
 
+  const estimateLuxFromImageSource = (
+    source: CanvasImageSource,
+  ): number => {
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = 64;
+    sampleCanvas.height = 48;
+    const ctx = sampleCanvas.getContext('2d', {willReadFrequently: true});
+    if (!ctx) return luxValue;
+    ctx.drawImage(source, 0, 0, 64, 48);
+    const pixels = ctx.getImageData(0, 0, 64, 48).data;
+    let sumLuma = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const luma = 0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
+      sumLuma += luma;
+    }
+    const avgLuma = sumLuma / (64 * 48); // 0..255
+    // Calibrated curve for indoor north-facing window light (25..3000 lux)
+    return Math.round(35 * Math.pow(avgLuma / 255, 2.2) * 85 + 25);
+  };
+
+  useEffect(() => {
+    if (!cameraActive) return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+
+    let cancelled = false;
+    video.srcObject = stream;
+    void video.play().catch(() => {});
+
+    let lastSampleTime = 0;
+    const tick = (ts: number) => {
+      if (cancelled || !streamRef.current || !videoRef.current) return;
+      const v = videoRef.current;
+      if (
+        ts - lastSampleTime > 300 &&
+        v.readyState >= 2 &&
+        v.videoWidth > 0 &&
+        v.videoHeight > 0
+      ) {
+        lastSampleTime = ts;
+        const estimated = estimateLuxFromImageSource(v);
+        setLuxValue(estimated);
+        setLuxSource('camera');
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      cancelled = true;
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (video) {
+        video.srcObject = null;
+      }
+    };
+  }, [cameraActive]);
+
   const stopCameraEstimator = () => {
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
@@ -154,49 +221,60 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
       return;
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setCameraError('Camera access is unavailable in this browser.');
+      setCameraError(
+        'Live camera preview is blocked in this browser/iframe. Tap "Measure from Photo" or enter lux manually below.',
+      );
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {facingMode: 'environment'},
-        audio: false,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {facingMode: {ideal: 'environment'}},
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
       streamRef.current = stream;
       setCameraActive(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : '';
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        setCameraError(
+          'Camera permission was blocked by the browser or preview frame. Use "Measure from Photo" below or open the app directly.',
+        );
+      } else {
+        setCameraError(
+          'Could not start live camera preview. Use "Measure from Photo" or pick a north-window zone below.',
+        );
       }
+    }
+  };
 
-      const sampleCanvas = document.createElement('canvas');
-      sampleCanvas.width = 64;
-      sampleCanvas.height = 48;
-      const ctx = sampleCanvas.getContext('2d', {willReadFrequently: true});
-
-      let lastSampleTime = 0;
-      const tick = (ts: number) => {
-        if (!streamRef.current) return;
-        if (ts - lastSampleTime > 300 && videoRef.current && ctx) {
-          lastSampleTime = ts;
-          ctx.drawImage(videoRef.current, 0, 0, 64, 48);
-          const pixels = ctx.getImageData(0, 0, 64, 48).data;
-          let sumLuma = 0;
-          for (let i = 0; i < pixels.length; i += 4) {
-            const luma = 0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
-            sumLuma += luma;
-          }
-          const avgLuma = sumLuma / (64 * 48); // 0..255
-          // Calibrated curve for indoor north-facing window light (40..3200 lux)
-          const estimated = Math.round(35 * Math.pow(avgLuma / 255, 2.2) * 85 + 25);
-          setLuxValue(estimated);
-          setLuxSource('camera');
-        }
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
+  const handleMeasureFromPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setCameraError(null);
+    try {
+      const bitmapUrl = URL.createObjectURL(file);
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Could not read photo'));
+        img.src = bitmapUrl;
+      });
+      const estimated = estimateLuxFromImageSource(img);
+      URL.revokeObjectURL(bitmapUrl);
+      setLuxValue(estimated);
+      setLuxSource('camera');
+      stopCameraEstimator();
     } catch {
-      setCameraError('Camera permission was denied. Enter lux manually or pick a north-window zone.');
+      setCameraError('Could not read that photo for lux estimation. Try another photo or enter lux manually.');
     }
   };
 
@@ -433,6 +511,24 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
               <Camera className="w-4 h-4" />
               <span>{cameraActive ? 'Stop Camera Meter' : 'Camera Luminance Meter'}</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              className="min-h-[44px] px-4 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#18221D] text-sm font-medium inline-flex items-center gap-2 hover:bg-[#F0F1EC] transition-colors"
+            >
+              <ImagePlus className="w-4 h-4 text-[#1F513B]" />
+              <span>Measure from Photo</span>
+            </button>
+
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => void handleMeasureFromPhoto(e)}
+              className="hidden"
+            />
           </div>
 
           {sensorError && (
