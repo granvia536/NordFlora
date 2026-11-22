@@ -23358,7 +23358,7 @@ var ProviderId;
 	ProviderId["PHONE"] = "phone";
 })(ProviderId || (ProviderId = {}));
 // node_modules/@capacitor-firebase/authentication/dist/esm/index.js
-var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-CE3EKWao.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
+var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-BAKhbrgl.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
 // node_modules/lucide-react/dist/esm/shared/src/utils.js
 /**
 * @license lucide-react v0.546.0 - ISC
@@ -25662,6 +25662,7 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 	const videoRef = (0, import_react.useRef)(null);
 	const streamRef = (0, import_react.useRef)(null);
 	const rafRef = (0, import_react.useRef)(null);
+	const photoInputRef = (0, import_react.useRef)(null);
 	const duePlants = (0, import_react.useMemo)(() => plants.filter((p) => getPlantAverageLuxStats(p, void 0, now).dueForMonthlyLux), [plants, currentMonthKey]);
 	(0, import_react.useEffect)(() => {
 		if (initialPlantId) setSelectedPlantId(initialPlantId);
@@ -25706,11 +25707,58 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 			setSensorError("Could not start phone light sensor. Try the Camera Estimator or enter a reading manually.");
 		}
 	};
+	const estimateLuxFromImageSource = (source) => {
+		const sampleCanvas = document.createElement("canvas");
+		sampleCanvas.width = 64;
+		sampleCanvas.height = 48;
+		const ctx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+		if (!ctx) return luxValue;
+		ctx.drawImage(source, 0, 0, 64, 48);
+		const pixels = ctx.getImageData(0, 0, 64, 48).data;
+		let sumLuma = 0;
+		for (let i = 0; i < pixels.length; i += 4) {
+			const luma = .2126 * pixels[i] + .7152 * pixels[i + 1] + .0722 * pixels[i + 2];
+			sumLuma += luma;
+		}
+		const avgLuma = sumLuma / 3072;
+		return Math.round(35 * Math.pow(avgLuma / 255, 2.2) * 85 + 25);
+	};
+	(0, import_react.useEffect)(() => {
+		if (!cameraActive) return;
+		const video = videoRef.current;
+		const stream = streamRef.current;
+		if (!video || !stream) return;
+		let cancelled = false;
+		video.srcObject = stream;
+		video.play().catch(() => {});
+		let lastSampleTime = 0;
+		const tick = (ts) => {
+			if (cancelled || !streamRef.current || !videoRef.current) return;
+			const v = videoRef.current;
+			if (ts - lastSampleTime > 300 && v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0) {
+				lastSampleTime = ts;
+				const estimated = estimateLuxFromImageSource(v);
+				setLuxValue(estimated);
+				setLuxSource("camera");
+			}
+			rafRef.current = requestAnimationFrame(tick);
+		};
+		rafRef.current = requestAnimationFrame(tick);
+		return () => {
+			cancelled = true;
+			if (rafRef.current) {
+				cancelAnimationFrame(rafRef.current);
+				rafRef.current = null;
+			}
+			if (video) video.srcObject = null;
+		};
+	}, [cameraActive]);
 	const stopCameraEstimator = () => {
 		if (rafRef.current) {
 			cancelAnimationFrame(rafRef.current);
 			rafRef.current = null;
 		}
+		if (videoRef.current) videoRef.current.srcObject = null;
 		if (streamRef.current) {
 			streamRef.current.getTracks().forEach((t) => t.stop());
 			streamRef.current = null;
@@ -25724,46 +25772,50 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 			return;
 		}
 		if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-			setCameraError("Camera access is unavailable in this browser.");
+			setCameraError("Live camera preview is blocked in this browser/iframe. Tap \"Measure from Photo\" or enter lux manually below.");
 			return;
 		}
 		try {
-			const stream = await navigator.mediaDevices.getUserMedia({
-				video: { facingMode: "environment" },
-				audio: false
-			});
+			let stream;
+			try {
+				stream = await navigator.mediaDevices.getUserMedia({
+					video: { facingMode: { ideal: "environment" } },
+					audio: false
+				});
+			} catch {
+				stream = await navigator.mediaDevices.getUserMedia({
+					video: true,
+					audio: false
+				});
+			}
 			streamRef.current = stream;
 			setCameraActive(true);
-			if (videoRef.current) {
-				videoRef.current.srcObject = stream;
-				await videoRef.current.play().catch(() => {});
-			}
-			const sampleCanvas = document.createElement("canvas");
-			sampleCanvas.width = 64;
-			sampleCanvas.height = 48;
-			const ctx = sampleCanvas.getContext("2d", { willReadFrequently: true });
-			let lastSampleTime = 0;
-			const tick = (ts) => {
-				if (!streamRef.current) return;
-				if (ts - lastSampleTime > 300 && videoRef.current && ctx) {
-					lastSampleTime = ts;
-					ctx.drawImage(videoRef.current, 0, 0, 64, 48);
-					const pixels = ctx.getImageData(0, 0, 64, 48).data;
-					let sumLuma = 0;
-					for (let i = 0; i < pixels.length; i += 4) {
-						const luma = .2126 * pixels[i] + .7152 * pixels[i + 1] + .0722 * pixels[i + 2];
-						sumLuma += luma;
-					}
-					const avgLuma = sumLuma / 3072;
-					const estimated = Math.round(35 * Math.pow(avgLuma / 255, 2.2) * 85 + 25);
-					setLuxValue(estimated);
-					setLuxSource("camera");
-				}
-				rafRef.current = requestAnimationFrame(tick);
-			};
-			rafRef.current = requestAnimationFrame(tick);
+		} catch (err) {
+			const name = err instanceof DOMException ? err.name : "";
+			if (name === "NotAllowedError" || name === "SecurityError") setCameraError("Camera permission was blocked by the browser or preview frame. Use \"Measure from Photo\" below or open the app directly.");
+			else setCameraError("Could not start live camera preview. Use \"Measure from Photo\" or pick a north-window zone below.");
+		}
+	};
+	const handleMeasureFromPhoto = async (e) => {
+		const file = e.target.files?.[0];
+		e.target.value = "";
+		if (!file) return;
+		setCameraError(null);
+		try {
+			const bitmapUrl = URL.createObjectURL(file);
+			const img = new Image();
+			await new Promise((resolve, reject) => {
+				img.onload = () => resolve();
+				img.onerror = () => reject(/* @__PURE__ */ new Error("Could not read photo"));
+				img.src = bitmapUrl;
+			});
+			const estimated = estimateLuxFromImageSource(img);
+			URL.revokeObjectURL(bitmapUrl);
+			setLuxValue(estimated);
+			setLuxSource("camera");
+			stopCameraEstimator();
 		} catch {
-			setCameraError("Camera permission was denied. Enter lux manually or pick a north-window zone.");
+			setCameraError("Could not read that photo for lux estimation. Try another photo or enter lux manually.");
 		}
 	};
 	const handleDownloadMonthlyCalendarReminder = () => {
@@ -25949,17 +26001,34 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "flex flex-wrap gap-3",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: startPhoneSensor,
-								className: `min-h-[44px] px-4 py-2 rounded-xl text-sm font-medium inline-flex items-center gap-2 transition-colors ${sensorActive ? "bg-[#1F513B] text-white" : "border border-[#D4D8CE] bg-white text-[#18221D] hover:bg-[#F0F1EC]"}`,
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gauge, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: sensorActive ? "Phone Sensor Active" : "Read Phone Lux Sensor" })]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								type: "button",
-								onClick: () => void startCameraEstimator(),
-								className: `min-h-[44px] px-4 py-2 rounded-xl text-sm font-medium inline-flex items-center gap-2 transition-colors ${cameraActive ? "bg-[#1F513B] text-white" : "border border-[#D4D8CE] bg-white text-[#18221D] hover:bg-[#F0F1EC]"}`,
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: cameraActive ? "Stop Camera Meter" : "Camera Luminance Meter" })]
-							})]
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: startPhoneSensor,
+									className: `min-h-[44px] px-4 py-2 rounded-xl text-sm font-medium inline-flex items-center gap-2 transition-colors ${sensorActive ? "bg-[#1F513B] text-white" : "border border-[#D4D8CE] bg-white text-[#18221D] hover:bg-[#F0F1EC]"}`,
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gauge, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: sensorActive ? "Phone Sensor Active" : "Read Phone Lux Sensor" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => void startCameraEstimator(),
+									className: `min-h-[44px] px-4 py-2 rounded-xl text-sm font-medium inline-flex items-center gap-2 transition-colors ${cameraActive ? "bg-[#1F513B] text-white" : "border border-[#D4D8CE] bg-white text-[#18221D] hover:bg-[#F0F1EC]"}`,
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: cameraActive ? "Stop Camera Meter" : "Camera Luminance Meter" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									type: "button",
+									onClick: () => photoInputRef.current?.click(),
+									className: "min-h-[44px] px-4 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#18221D] text-sm font-medium inline-flex items-center gap-2 hover:bg-[#F0F1EC] transition-colors",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ImagePlus, { className: "w-4 h-4 text-[#1F513B]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Measure from Photo" })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									ref: photoInputRef,
+									type: "file",
+									accept: "image/*",
+									capture: "environment",
+									onChange: (e) => void handleMeasureFromPhoto(e),
+									className: "hidden"
+								})
+							]
 						}),
 						sensorError && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "text-xs text-[#B45309] bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5",
@@ -57039,7 +57108,10 @@ async function identifyPlantFromPhoto(imageDataUrl) {
 	const currentUser = auth.currentUser;
 	if (!currentUser) throw new Error("Please sign in before looking up a plant photo.");
 	const idToken = await currentUser.getIdToken();
-	const res = await fetch("/api/identify-plant", {
+	const configuredApiBase = "".trim().replace(/\/+$/, "");
+	const endpoint = configuredApiBase ? `${configuredApiBase}/api/identify-plant` : "/api/identify-plant";
+	if (Capacitor.isNativePlatform() && !configuredApiBase) throw new Error("Photo species lookup in the standalone APK needs VITE_API_BASE_URL set to your hosted NordFlora server URL at build time. You can still pick a species preset or enter care details manually.");
+	const res = await fetch(endpoint, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
@@ -57047,6 +57119,7 @@ async function identifyPlantFromPhoto(imageDataUrl) {
 		},
 		body: JSON.stringify({ imageDataUrl })
 	});
+	if (!(res.headers.get("content-type") || "").includes("application/json")) throw new Error("Photo species lookup API is unreachable from this build. Pick a species preset or enter care details manually.");
 	const payload = await res.json().catch(() => ({}));
 	if (!res.ok) throw new Error(payload.error || "Could not look up that plant photo online.");
 	return {

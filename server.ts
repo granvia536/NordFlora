@@ -118,6 +118,27 @@ async function startServer() {
   const app = express();
   app.use(express.json({limit: '1mb'}));
 
+  const CAPACITOR_ORIGINS = new Set([
+    'https://nordflora.local',
+    'https://localhost',
+    'http://localhost',
+  ]);
+
+  app.use('/api/identify-plant', (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && CAPACITOR_ORIGINS.has(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    }
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+    next();
+  });
+
   app.post('/api/identify-plant', async (req, res) => {
     const uid = await verifyFirebaseBearerToken(req.headers.authorization);
     if (!uid) {

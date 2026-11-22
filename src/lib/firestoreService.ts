@@ -1,3 +1,4 @@
+import {Capacitor} from '@capacitor/core';
 import {
   collection,
   deleteDoc,
@@ -57,7 +58,16 @@ export async function identifyPlantFromPhoto(imageDataUrl: string): Promise<Plan
     throw new Error('Please sign in before looking up a plant photo.');
   }
   const idToken = await currentUser.getIdToken();
-  const res = await fetch('/api/identify-plant', {
+  const configuredApiBase = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
+  const endpoint = configuredApiBase ? `${configuredApiBase}/api/identify-plant` : '/api/identify-plant';
+
+  if (Capacitor.isNativePlatform() && !configuredApiBase) {
+    throw new Error(
+      'Photo species lookup in the standalone APK needs VITE_API_BASE_URL set to your hosted NordFlora server URL at build time. You can still pick a species preset or enter care details manually.',
+    );
+  }
+
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -65,6 +75,13 @@ export async function identifyPlantFromPhoto(imageDataUrl: string): Promise<Plan
     },
     body: JSON.stringify({imageDataUrl}),
   });
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(
+      'Photo species lookup API is unreachable from this build. Pick a species preset or enter care details manually.',
+    );
+  }
 
   const payload = (await res.json().catch(() => ({}))) as Partial<PlantLookupResult> & {
     error?: string;
