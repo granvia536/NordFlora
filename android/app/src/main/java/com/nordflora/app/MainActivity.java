@@ -8,8 +8,9 @@ public class MainActivity extends BridgeActivity {
   public void onCreate(Bundle savedInstanceState) {
     // Capacitor 8 automatically loads FirebaseAuthentication from
     // assets/capacitor.plugins.json during super.onCreate().
-    // Only the app's custom plugin needs explicit registration.
+    // Only the app's custom plugins need explicit registration.
     registerPlugin(PlantWidgetPlugin.class);
+    registerPlugin(LightSensorPlugin.class);
     super.onCreate(savedInstanceState);
   }
 }

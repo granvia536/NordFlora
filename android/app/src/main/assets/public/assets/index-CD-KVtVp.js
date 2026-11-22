@@ -23358,7 +23358,7 @@ var ProviderId;
 	ProviderId["PHONE"] = "phone";
 })(ProviderId || (ProviderId = {}));
 // node_modules/@capacitor-firebase/authentication/dist/esm/index.js
-var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-Cca_i8uC.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
+var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-Vi74w4C9.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
 // node_modules/lucide-react/dist/esm/shared/src/utils.js
 /**
 * @license lucide-react v0.546.0 - ISC
@@ -25641,6 +25641,41 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 		})]
 	});
 };
+// src/lib/nativeLightSensor.ts
+var LightSensor = registerPlugin("LightSensor");
+function hasNativeLightSensorBridge() {
+	return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("LightSensor");
+}
+async function startNativeLightSensor(onReading) {
+	const availability = await LightSensor.isAvailable();
+	if (!availability.available) throw new Error("This Android device does not have a hardware ambient light sensor.");
+	let listenerHandle = await LightSensor.addListener("luxReading", onReading);
+	try {
+		const startResult = await LightSensor.startListening();
+		if (typeof startResult.lux === "number") onReading({
+			lux: startResult.lux,
+			rawLux: startResult.rawLux,
+			sensorName: startResult.sensorName
+		});
+		return {
+			sensorName: startResult.sensorName ?? availability.sensorName,
+			initialLux: startResult.lux,
+			stop: async () => {
+				if (listenerHandle) {
+					await listenerHandle.remove().catch(() => {});
+					listenerHandle = null;
+				}
+				await LightSensor.stopListening().catch(() => {});
+			}
+		};
+	} catch (err) {
+		if (listenerHandle) {
+			await listenerHandle.remove().catch(() => {});
+			listenerHandle = null;
+		}
+		throw err;
+	}
+}
 // src/components/LuxMeterView.tsx
 var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 	const now = /* @__PURE__ */ new Date();
@@ -25652,6 +25687,7 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 	const [readingPeriod, setReadingPeriod] = (0, import_react.useState)("peak_noon");
 	const [noteInput, setNoteInput] = (0, import_react.useState)("");
 	const [sensorActive, setSensorActive] = (0, import_react.useState)(false);
+	const [sensorName, setSensorName] = (0, import_react.useState)(null);
 	const [sensorError, setSensorError] = (0, import_react.useState)(null);
 	const [cameraActive, setCameraActive] = (0, import_react.useState)(false);
 	const [cameraError, setCameraError] = (0, import_react.useState)(null);
@@ -25663,6 +25699,7 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 	const streamRef = (0, import_react.useRef)(null);
 	const rafRef = (0, import_react.useRef)(null);
 	const photoInputRef = (0, import_react.useRef)(null);
+	const sensorStopRef = (0, import_react.useRef)(null);
 	const duePlants = (0, import_react.useMemo)(() => plants.filter((p) => getPlantAverageLuxStats(p, void 0, now).dueForMonthlyLux), [plants, currentMonthKey]);
 	(0, import_react.useEffect)(() => {
 		if (initialPlantId) setSelectedPlantId(initialPlantId);
@@ -25675,15 +25712,49 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 	]);
 	(0, import_react.useEffect)(() => {
 		return () => {
+			if (sensorStopRef.current) {
+				sensorStopRef.current();
+				sensorStopRef.current = null;
+			}
 			if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
 			if (rafRef.current) cancelAnimationFrame(rafRef.current);
 		};
 	}, []);
 	const hasAmbientSensor = typeof window !== "undefined" && "AmbientLightSensor" in window;
-	const startPhoneSensor = () => {
+	const hasNativeSensor = hasNativeLightSensorBridge();
+	const stopPhoneSensor = async () => {
+		if (sensorStopRef.current) {
+			await Promise.resolve(sensorStopRef.current()).catch(() => {});
+			sensorStopRef.current = null;
+		}
+		setSensorActive(false);
+		setSensorName(null);
+	};
+	const startPhoneSensor = async () => {
 		setSensorError(null);
+		if (sensorActive) {
+			await stopPhoneSensor();
+			return;
+		}
+		if (cameraActive) stopCameraEstimator();
+		if (hasNativeSensor) {
+			try {
+				const handle = await startNativeLightSensor((reading) => {
+					setLuxValue(Math.max(0, Math.round(reading.lux)));
+					setLuxSource("sensor");
+					if (reading.sensorName) setSensorName(reading.sensorName);
+				});
+				sensorStopRef.current = handle.stop;
+				setSensorName(handle.sensorName ?? "Android Light Sensor");
+				setSensorActive(true);
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : "Could not start Android light sensor. Use the Camera Estimator or enter lux manually.";
+				setSensorError(msg);
+			}
+			return;
+		}
 		if (!hasAmbientSensor) {
-			setSensorError("AmbientLightSensor is blocked or unsupported in this browser. Use the Camera Estimator or enter lux manually below.");
+			setSensorError("AmbientLightSensor is blocked or unsupported in this browser. Install the NordFlora Android APK to use your phone’s hardware sensor, or use the Camera Estimator / manual entry below.");
 			return;
 		}
 		try {
@@ -25702,6 +25773,12 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 			sensor.addEventListener("reading", onReading);
 			sensor.addEventListener("error", onError);
 			sensor.start();
+			sensorStopRef.current = () => {
+				sensor.removeEventListener("reading", onReading);
+				sensor.removeEventListener("error", onError);
+				sensor.stop();
+			};
+			setSensorName("Browser AmbientLightSensor");
 			setSensorActive(true);
 		} catch {
 			setSensorError("Could not start phone light sensor. Try the Camera Estimator or enter a reading manually.");
@@ -25771,6 +25848,7 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 			stopCameraEstimator();
 			return;
 		}
+		if (sensorActive) await stopPhoneSensor();
 		if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 			setCameraError("Live camera preview is blocked in this browser/iframe. Tap \"Measure from Photo\" or enter lux manually below.");
 			return;
@@ -25857,6 +25935,7 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 			setSavedFeedback(`Saved ${luxValue} lux to ${targetName} · New avg ${previewNewAvg} lx`);
 			setNoteInput("");
 			stopCameraEstimator();
+			await stopPhoneSensor();
 			const remainingDue = duePlants.filter((p) => p.id !== selectedPlantId);
 			if (remainingDue.length > 0) setSelectedPlantId(remainingDue[0].id);
 		} finally {
@@ -26004,9 +26083,9 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 							children: [
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 									type: "button",
-									onClick: startPhoneSensor,
+									onClick: () => void startPhoneSensor(),
 									className: `min-h-[44px] px-4 py-2 rounded-xl text-sm font-medium inline-flex items-center gap-2 transition-colors ${sensorActive ? "bg-[#1F513B] text-white" : "border border-[#D4D8CE] bg-white text-[#18221D] hover:bg-[#F0F1EC]"}`,
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gauge, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: sensorActive ? "Phone Sensor Active" : "Read Phone Lux Sensor" })]
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gauge, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: sensorActive ? "Stop Phone Sensor" : "Read Phone Lux Sensor" })]
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 									type: "button",
@@ -26028,6 +26107,17 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 									onChange: (e) => void handleMeasureFromPhoto(e),
 									className: "hidden"
 								})
+							]
+						}),
+						sensorActive && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+							className: "text-xs text-[#1F513B] bg-[#EEF4F0] border border-[#CFE0D5] rounded-xl px-3.5 py-2.5",
+							children: [
+								"Live hardware sensor active",
+								sensorName ? ` (${sensorName})` : "",
+								" — hold the top edge of your phone facing the window or sky at leaf height, then tap",
+								" ",
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Save Lux Reading" }),
+								"."
 							]
 						}),
 						sensorError && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {

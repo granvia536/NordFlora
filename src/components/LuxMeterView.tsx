@@ -16,6 +16,7 @@ import {
   getCurrentMonthKey,
   getPlantAverageLuxStats,
 } from '../lib/botanicalEngine';
+import {hasNativeLightSensorBridge, startNativeLightSensor} from '../lib/nativeLightSensor';
 import {LuxSource, PlantRecord} from '../types';
 
 interface AmbientLightSensorInstance {
@@ -55,6 +56,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
   const [readingPeriod, setReadingPeriod] = useState<'peak_noon' | 'general'>('peak_noon');
   const [noteInput, setNoteInput] = useState<string>('');
   const [sensorActive, setSensorActive] = useState(false);
+  const [sensorName, setSensorName] = useState<string | null>(null);
   const [sensorError, setSensorError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -69,6 +71,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const sensorStopRef = useRef<(() => Promise<void> | void) | null>(null);
 
   const duePlants = useMemo(
     () =>
@@ -88,6 +91,10 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
 
   useEffect(() => {
     return () => {
+      if (sensorStopRef.current) {
+        void sensorStopRef.current();
+        sensorStopRef.current = null;
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
@@ -97,12 +104,53 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
 
   const hasAmbientSensor =
     typeof window !== 'undefined' && 'AmbientLightSensor' in window;
+  const hasNativeSensor = hasNativeLightSensorBridge();
 
-  const startPhoneSensor = () => {
+  const stopPhoneSensor = async () => {
+    if (sensorStopRef.current) {
+      await Promise.resolve(sensorStopRef.current()).catch(() => {});
+      sensorStopRef.current = null;
+    }
+    setSensorActive(false);
+    setSensorName(null);
+  };
+
+  const startPhoneSensor = async () => {
     setSensorError(null);
+    if (sensorActive) {
+      await stopPhoneSensor();
+      return;
+    }
+
+    if (cameraActive) {
+      stopCameraEstimator();
+    }
+
+    if (hasNativeSensor) {
+      try {
+        const handle = await startNativeLightSensor((reading) => {
+          setLuxValue(Math.max(0, Math.round(reading.lux)));
+          setLuxSource('sensor');
+          if (reading.sensorName) {
+            setSensorName(reading.sensorName);
+          }
+        });
+        sensorStopRef.current = handle.stop;
+        setSensorName(handle.sensorName ?? 'Android Light Sensor');
+        setSensorActive(true);
+      } catch (err) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Could not start Android light sensor. Use the Camera Estimator or enter lux manually.';
+        setSensorError(msg);
+      }
+      return;
+    }
+
     if (!hasAmbientSensor) {
       setSensorError(
-        'AmbientLightSensor is blocked or unsupported in this browser. Use the Camera Estimator or enter lux manually below.',
+        'AmbientLightSensor is blocked or unsupported in this browser. Install the NordFlora Android APK to use your phone’s hardware sensor, or use the Camera Estimator / manual entry below.',
       );
       return;
     }
@@ -129,6 +177,12 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
       sensor.addEventListener('reading', onReading);
       sensor.addEventListener('error', onError);
       sensor.start();
+      sensorStopRef.current = () => {
+        sensor.removeEventListener('reading', onReading);
+        sensor.removeEventListener('error', onError);
+        sensor.stop();
+      };
+      setSensorName('Browser AmbientLightSensor');
       setSensorActive(true);
     } catch {
       setSensorError(
@@ -219,6 +273,9 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
     if (cameraActive) {
       stopCameraEstimator();
       return;
+    }
+    if (sensorActive) {
+      await stopPhoneSensor();
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setCameraError(
@@ -338,6 +395,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
       );
       setNoteInput('');
       stopCameraEstimator();
+      await stopPhoneSensor();
 
       // Advance smoothly to the next plant due this month if any remain
       const remainingDue = duePlants.filter((p) => p.id !== selectedPlantId);
@@ -488,7 +546,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={startPhoneSensor}
+              onClick={() => void startPhoneSensor()}
               className={`min-h-[44px] px-4 py-2 rounded-xl text-sm font-medium inline-flex items-center gap-2 transition-colors ${
                 sensorActive
                   ? 'bg-[#1F513B] text-white'
@@ -496,7 +554,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
               }`}
             >
               <Gauge className="w-4 h-4" />
-              <span>{sensorActive ? 'Phone Sensor Active' : 'Read Phone Lux Sensor'}</span>
+              <span>{sensorActive ? 'Stop Phone Sensor' : 'Read Phone Lux Sensor'}</span>
             </button>
 
             <button
@@ -531,6 +589,13 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
             />
           </div>
 
+          {sensorActive && (
+            <p className="text-xs text-[#1F513B] bg-[#EEF4F0] border border-[#CFE0D5] rounded-xl px-3.5 py-2.5">
+              Live hardware sensor active{sensorName ? ` (${sensorName})` : ''} — hold the top edge
+              of your phone facing the window or sky at leaf height, then tap{' '}
+              <strong>Save Lux Reading</strong>.
+            </p>
+          )}
           {sensorError && (
             <p className="text-xs text-[#B45309] bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5">
               {sensorError}
