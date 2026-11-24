@@ -106,39 +106,40 @@ jobs:
           CAPACITOR_TELEMETRY: 'false'
         run: npx cap sync android
 
-      - name: Cache Android debug keystore for stable SHA-1
+      - name: Cache the actual Android debug signing key
         uses: actions/cache@v5
         with:
-          path: ~/.android/debug.keystore
-          key: nordflora-android-debug-keystore-v1
+          path: ~/.config/.android/debug.keystore
+          key: nordflora-android-debug-keystore-v2
 
-      - name: Ensure Android debug keystore exists
+      - name: Ensure the same Android debug signing key is used
         env:
           ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
         run: |
-          mkdir -p ~/.android
+          mkdir -p ~/.config/.android
           if [ -n "$ANDROID_DEBUG_KEYSTORE_BASE64" ]; then
-            printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > ~/.android/debug.keystore
-            echo "Restored ~/.android/debug.keystore from ANDROID_DEBUG_KEYSTORE_BASE64 secret."
-          elif [ ! -f ~/.android/debug.keystore ]; then
+            printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > ~/.config/.android/debug.keystore
+            echo "Restored the signing key from ANDROID_DEBUG_KEYSTORE_BASE64."
+          elif [ -f ~/.config/.android/debug.keystore ]; then
+            echo "Using the cached Android signing key."
+          else
             keytool -genkeypair -v \
-              -keystore ~/.android/debug.keystore \
+              -keystore ~/.config/.android/debug.keystore \
               -storepass android \
               -alias androiddebugkey \
               -keypass android \
               -keyalg RSA \
               -keysize 2048 \
               -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-            echo "Generated new ~/.android/debug.keystore (cached for future runs)."
-          else
-            echo "Using cached ~/.android/debug.keystore."
+              -dname "CN=NordFlora Android,O=NordFlora,C=ES"
+            echo "Generated the permanent NordFlora signing key; it will be cached after this successful run."
           fi
+          keytool -list -keystore ~/.config/.android/debug.keystore -storepass android -alias androiddebugkey
 
       - name: Build debug APK
         working-directory: android
         run: |
-          gradle assembleDebug --stacktrace --no-daemon
+          gradle assembleDebug -PappVersionCode="$GITHUB_RUN_NUMBER" --stacktrace --no-daemon
           echo "===== Android debug signing certificate (add this SHA-1 to Firebase) ====="
           gradle signingReport --no-daemon
           python3 - <<'PY'
@@ -150,7 +151,7 @@ jobs:
           apk_sha1 = ""
           if apk.exists():
               out = subprocess.check_output(["keytool", "-printcert", "-jarfile", str(apk)], text=True, stderr=subprocess.STDOUT)
-              m = re.search(r"SHA1:\s*([0-9A-Fa-f:]+)", out)
+              m = re.search(r"SHA1:\\s*([0-9A-Fa-f:]+)", out)
               if m:
                   apk_sha1 = m.group(1).upper()
                   print(f"APK signing SHA-1: {apk_sha1}")
