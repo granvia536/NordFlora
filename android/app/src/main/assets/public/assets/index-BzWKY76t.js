@@ -23358,7 +23358,7 @@ var ProviderId;
 	ProviderId["PHONE"] = "phone";
 })(ProviderId || (ProviderId = {}));
 // node_modules/@capacitor-firebase/authentication/dist/esm/index.js
-var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-GazUQHq5.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
+var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-atw4hep7.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
 // node_modules/lucide-react/dist/esm/shared/src/utils.js
 /**
 * @license lucide-react v0.546.0 - ISC
@@ -26461,12 +26461,17 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 	const [saving, setSaving] = (0, import_react.useState)(false);
 	const [savedFeedback, setSavedFeedback] = (0, import_react.useState)(null);
 	const [reminderFeedback, setReminderFeedback] = (0, import_react.useState)(null);
+	const [editingPlantId, setEditingPlantId] = (0, import_react.useState)(null);
+	const [inlineAvgLux, setInlineAvgLux] = (0, import_react.useState)("");
+	const [inlineSaving, setInlineSaving] = (0, import_react.useState)(false);
+	const [inlineFeedback, setInlineFeedback] = (0, import_react.useState)(null);
 	const [notifStatus, setNotifStatus] = (0, import_react.useState)(() => typeof Notification !== "undefined" ? Notification.permission : "unsupported");
 	const videoRef = (0, import_react.useRef)(null);
 	const streamRef = (0, import_react.useRef)(null);
 	const rafRef = (0, import_react.useRef)(null);
 	const photoInputRef = (0, import_react.useRef)(null);
 	const sensorStopRef = (0, import_react.useRef)(null);
+	const manualInputRef = (0, import_react.useRef)(null);
 	const duePlants = (0, import_react.useMemo)(() => plants.filter((p) => getPlantAverageLuxStats(p, void 0, now).dueForMonthlyLux), [plants, currentMonthKey]);
 	(0, import_react.useEffect)(() => {
 		if (initialPlantId) setSelectedPlantId(initialPlantId);
@@ -26711,6 +26716,22 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 			setSaving(false);
 		}
 	};
+	const handleInlineSaveAvgLux = async (plant) => {
+		const parsed = Math.max(0, Math.min(15e4, Math.round(Number(inlineAvgLux) || 0)));
+		setInlineSaving(true);
+		setInlineFeedback(null);
+		try {
+			await onSaveLux(plant.id, parsed, "manual", readingPeriod, void 0, "set_average");
+			setEditingPlantId(null);
+			setSelectedPlantId(plant.id);
+			setLuxValue(parsed);
+			setInlineFeedback(`Updated ${plant.name} average daylight to ${parsed} lx.`);
+		} catch (err) {
+			setInlineFeedback(err instanceof Error ? err.message : "Could not update average daylight.");
+		} finally {
+			setInlineSaving(false);
+		}
+	};
 	const northLightZone = luxValue < 150 ? "Deep interior shade — extend watering intervals" : luxValue < 450 ? "Mid-room Barcelona north light — ideal for Pothos, ZZ, Snake Plant" : luxValue < 1200 ? "North windowsill edge — supports Monstera, Peace Lily, Ferns" : "Bright reflected courtyard sky — faster transpiration";
 	const measuredCount = plants.length - duePlants.length;
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -26924,6 +26945,7 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 										className: "block text-xs font-medium text-[#4B5850] mb-1.5",
 										children: "Exact Lux Value"
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+										ref: manualInputRef,
 										id: "lux-manual-input",
 										type: "number",
 										min: 0,
@@ -27098,72 +27120,142 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 					className: "lg:col-span-5 space-y-5",
 					children: [plants.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "rounded-2xl bg-white border border-[#E4E6DF] p-5 space-y-3",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "text-base font-semibold text-[#18221D]",
-							children: "Average Daylight Lux by Plant"
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "text-xs text-[#4B5850] mt-0.5",
-							children: "Arithmetic mean of all readings logged per plant, plus estimated full-day north skylight average."
-						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "divide-y divide-[#EEF0EA]",
-							children: plants.map((p) => {
-								const stats = getPlantAverageLuxStats(p, void 0, now);
-								return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									onClick: () => setSelectedPlantId(p.id),
-									className: `py-2.5 px-2 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-colors ${p.id === selectedPlantId ? "bg-[#EEF4F0]/60" : "hover:bg-[#FAFBF8]"}`,
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "min-w-0",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-											className: "text-sm font-medium text-[#18221D] truncate",
-											children: p.entryType === "group" ? `${p.quantity}× ${p.name}` : p.name
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-											className: "text-[11px] text-[#4B5850]",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+								className: "text-base font-semibold text-[#18221D]",
+								children: "Average Daylight Lux by Plant"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-xs text-[#4B5850] mt-0.5",
+								children: "Arithmetic mean of all readings logged per plant, plus estimated full-day north skylight average."
+							})] }),
+							inlineFeedback && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-xs font-medium text-[#1F513B] bg-[#EEF4F0] border border-[#CFE0D5] rounded-xl px-3 py-2",
+								children: inlineFeedback
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "divide-y divide-[#EEF0EA]",
+								children: plants.map((p) => {
+									const stats = getPlantAverageLuxStats(p, void 0, now);
+									const isEditing = editingPlantId === p.id;
+									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										onClick: () => {
+											if (!isEditing) setSelectedPlantId(p.id);
+										},
+										className: `py-2.5 px-2 rounded-xl space-y-2.5 transition-colors ${!isEditing ? "cursor-pointer" : ""} ${p.id === selectedPlantId ? "bg-[#EEF4F0]/60" : "hover:bg-[#FAFBF8]"}`,
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between gap-3",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "min-w-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+													className: "text-sm font-medium text-[#18221D] truncate",
+													children: p.entryType === "group" ? `${p.quantity}× ${p.name}` : p.name
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+													className: "text-[11px] text-[#4B5850]",
+													children: [
+														stats.readingCount,
+														" ",
+														stats.readingCount === 1 ? "reading" : "readings",
+														" ·",
+														" ",
+														stats.dueForMonthlyLux ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+															className: "text-[#B45309] font-medium",
+															children: ["Due in ", peakWindow.monthName]
+														}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+															className: "text-[#1F513B]",
+															children: "Logged this month"
+														})
+													]
+												})]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex items-center gap-2.5 shrink-0",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "text-right",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+														className: "text-sm font-semibold font-mono tabular-nums text-[#18221D] block",
+														children: [stats.avgRecordedLux, " lx avg"]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+														className: "text-[11px] font-mono tabular-nums text-[#4B5850] block",
+														children: [
+															"~",
+															stats.estimatedFullDayLux,
+															" lx day"
+														]
+													})]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+													type: "button",
+													onClick: (e) => {
+														e.stopPropagation();
+														setInlineFeedback(null);
+														if (isEditing) setEditingPlantId(null);
+														else {
+															setEditingPlantId(p.id);
+															setInlineAvgLux(String(stats.avgRecordedLux));
+														}
+													},
+													className: "min-h-[40px] px-3 py-1.5 rounded-lg border border-[#D4D8CE] bg-white text-xs font-medium text-[#1F513B] hover:bg-[#EEF4F0] whitespace-nowrap",
+													children: isEditing ? "Close" : "Edit"
+												})]
+											})]
+										}), isEditing && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											onClick: (e) => e.stopPropagation(),
+											className: "pt-2 border-t border-[#E4E6DF] flex flex-wrap items-center gap-2",
 											children: [
-												stats.readingCount,
-												" ",
-												stats.readingCount === 1 ? "reading" : "readings",
-												" ·",
-												" ",
-												stats.dueForMonthlyLux ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-													className: "text-[#B45309] font-medium",
-													children: ["Due in ", peakWindow.monthName]
-												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-													className: "text-[#1F513B]",
-													children: "Logged this month"
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+													htmlFor: `inline-lux-${p.id}`,
+													className: "sr-only",
+													children: ["Average daylight lux for ", p.name]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+													id: `inline-lux-${p.id}`,
+													type: "number",
+													inputMode: "numeric",
+													min: 0,
+													max: 15e4,
+													autoFocus: true,
+													value: inlineAvgLux,
+													onChange: (e) => setInlineAvgLux(e.target.value),
+													onKeyDown: (e) => {
+														if (e.key === "Enter") {
+															e.preventDefault();
+															handleInlineSaveAvgLux(p);
+														}
+													},
+													className: "w-28 min-h-[40px] px-3 py-1.5 rounded-lg border border-[#1F513B] bg-white text-sm font-mono tabular-nums text-[#18221D]"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "text-xs text-[#4B5850]",
+													children: "lx"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+													type: "button",
+													disabled: inlineSaving,
+													onClick: () => void handleInlineSaveAvgLux(p),
+													className: "min-h-[40px] px-3.5 py-1.5 rounded-lg bg-[#1F513B] text-white text-xs font-medium hover:bg-[#173E2D] disabled:opacity-50",
+													children: inlineSaving ? "Saving..." : "Save"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+													type: "button",
+													onClick: () => {
+														setEditingPlantId(null);
+														setSelectedPlantId(p.id);
+														setLuxValue(stats.avgRecordedLux);
+														setLuxSource("manual");
+														setSaveMode("set_average");
+														manualInputRef.current?.scrollIntoView({
+															behavior: "smooth",
+															block: "center"
+														});
+														manualInputRef.current?.focus();
+													},
+													className: "min-h-[40px] px-3 py-1.5 rounded-lg border border-[#D4D8CE] bg-white text-xs text-[#4B5850] hover:text-[#18221D]",
+													children: "Use Meter"
 												})
 											]
 										})]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-center gap-2.5 shrink-0",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "text-right",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-												className: "text-sm font-semibold font-mono tabular-nums text-[#18221D] block",
-												children: [stats.avgRecordedLux, " lx avg"]
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-												className: "text-[11px] font-mono tabular-nums text-[#4B5850] block",
-												children: [
-													"~",
-													stats.estimatedFullDayLux,
-													" lx day"
-												]
-											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											type: "button",
-											onClick: (e) => {
-												e.stopPropagation();
-												setSelectedPlantId(p.id);
-												setLuxValue(stats.avgRecordedLux);
-												setLuxSource("manual");
-												setSaveMode("set_average");
-											},
-											className: "min-h-[36px] px-2.5 py-1 rounded-lg border border-[#D4D8CE] bg-white text-xs font-medium text-[#1F513B] hover:bg-[#EEF4F0] whitespace-nowrap",
-											children: "Edit"
-										})]
-									})]
-								}, p.id);
+									}, p.id);
+								})
 							})
-						})]
+						]
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "rounded-2xl bg-white border border-[#E4E6DF] p-5 space-y-4",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {

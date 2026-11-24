@@ -65,6 +65,10 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
   const [saving, setSaving] = useState(false);
   const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
   const [reminderFeedback, setReminderFeedback] = useState<string | null>(null);
+  const [editingPlantId, setEditingPlantId] = useState<string | null>(null);
+  const [inlineAvgLux, setInlineAvgLux] = useState<string>('');
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const [inlineFeedback, setInlineFeedback] = useState<string | null>(null);
   const [notifStatus, setNotifStatus] = useState<NotificationPermission | 'unsupported'>(() =>
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
   );
@@ -74,6 +78,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
   const rafRef = useRef<number | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const sensorStopRef = useRef<(() => Promise<void> | void) | null>(null);
+  const manualInputRef = useRef<HTMLInputElement | null>(null);
 
   const duePlants = useMemo(
     () =>
@@ -416,6 +421,25 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
     }
   };
 
+  const handleInlineSaveAvgLux = async (plant: PlantRecord) => {
+    const parsed = Math.max(0, Math.min(150000, Math.round(Number(inlineAvgLux) || 0)));
+    setInlineSaving(true);
+    setInlineFeedback(null);
+    try {
+      await onSaveLux(plant.id, parsed, 'manual', readingPeriod, undefined, 'set_average');
+      setEditingPlantId(null);
+      setSelectedPlantId(plant.id);
+      setLuxValue(parsed);
+      setInlineFeedback(`Updated ${plant.name} average daylight to ${parsed} lx.`);
+    } catch (err) {
+      setInlineFeedback(
+        err instanceof Error ? err.message : 'Could not update average daylight.',
+      );
+    } finally {
+      setInlineSaving(false);
+    }
+  };
+
   const northLightZone =
     luxValue < 150
       ? 'Deep interior shade — extend watering intervals'
@@ -642,6 +666,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                   Exact Lux Value
                 </label>
                 <input
+                  ref={manualInputRef}
                   id="lux-manual-input"
                   type="number"
                   min={0}
@@ -837,56 +862,125 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                 </p>
               </div>
 
+              {inlineFeedback && (
+                <p className="text-xs font-medium text-[#1F513B] bg-[#EEF4F0] border border-[#CFE0D5] rounded-xl px-3 py-2">
+                  {inlineFeedback}
+                </p>
+              )}
+
               <div className="divide-y divide-[#EEF0EA]">
                 {plants.map((p) => {
                   const stats = getPlantAverageLuxStats(p, undefined, now);
+                  const isEditing = editingPlantId === p.id;
                   return (
                     <div
                       key={p.id}
-                      onClick={() => setSelectedPlantId(p.id)}
-                      className={`py-2.5 px-2 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-colors ${
-                        p.id === selectedPlantId ? 'bg-[#EEF4F0]/60' : 'hover:bg-[#FAFBF8]'
-                      }`}
+                      onClick={() => {
+                        if (!isEditing) setSelectedPlantId(p.id);
+                      }}
+                      className={`py-2.5 px-2 rounded-xl space-y-2.5 transition-colors ${
+                        !isEditing ? 'cursor-pointer' : ''
+                      } ${p.id === selectedPlantId ? 'bg-[#EEF4F0]/60' : 'hover:bg-[#FAFBF8]'}`}
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-[#18221D] truncate">
-                          {p.entryType === 'group' ? `${p.quantity}× ${p.name}` : p.name}
-                        </p>
-                        <p className="text-[11px] text-[#4B5850]">
-                          {stats.readingCount}{' '}
-                          {stats.readingCount === 1 ? 'reading' : 'readings'} ·{' '}
-                          {stats.dueForMonthlyLux ? (
-                            <span className="text-[#B45309] font-medium">
-                              Due in {peakWindow.monthName}
-                            </span>
-                          ) : (
-                            <span className="text-[#1F513B]">Logged this month</span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <div className="text-right">
-                          <span className="text-sm font-semibold font-mono tabular-nums text-[#18221D] block">
-                            {stats.avgRecordedLux} lx avg
-                          </span>
-                          <span className="text-[11px] font-mono tabular-nums text-[#4B5850] block">
-                            ~{stats.estimatedFullDayLux} lx day
-                          </span>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[#18221D] truncate">
+                            {p.entryType === 'group' ? `${p.quantity}× ${p.name}` : p.name}
+                          </p>
+                          <p className="text-[11px] text-[#4B5850]">
+                            {stats.readingCount}{' '}
+                            {stats.readingCount === 1 ? 'reading' : 'readings'} ·{' '}
+                            {stats.dueForMonthlyLux ? (
+                              <span className="text-[#B45309] font-medium">
+                                Due in {peakWindow.monthName}
+                              </span>
+                            ) : (
+                              <span className="text-[#1F513B]">Logged this month</span>
+                            )}
+                          </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedPlantId(p.id);
-                            setLuxValue(stats.avgRecordedLux);
-                            setLuxSource('manual');
-                            setSaveMode('set_average');
-                          }}
-                          className="min-h-[36px] px-2.5 py-1 rounded-lg border border-[#D4D8CE] bg-white text-xs font-medium text-[#1F513B] hover:bg-[#EEF4F0] whitespace-nowrap"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <div className="text-right">
+                            <span className="text-sm font-semibold font-mono tabular-nums text-[#18221D] block">
+                              {stats.avgRecordedLux} lx avg
+                            </span>
+                            <span className="text-[11px] font-mono tabular-nums text-[#4B5850] block">
+                              ~{stats.estimatedFullDayLux} lx day
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInlineFeedback(null);
+                              if (isEditing) {
+                                setEditingPlantId(null);
+                              } else {
+                                setEditingPlantId(p.id);
+                                setInlineAvgLux(String(stats.avgRecordedLux));
+                              }
+                            }}
+                            className="min-h-[40px] px-3 py-1.5 rounded-lg border border-[#D4D8CE] bg-white text-xs font-medium text-[#1F513B] hover:bg-[#EEF4F0] whitespace-nowrap"
+                          >
+                            {isEditing ? 'Close' : 'Edit'}
+                          </button>
+                        </div>
                       </div>
+
+                      {isEditing && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="pt-2 border-t border-[#E4E6DF] flex flex-wrap items-center gap-2"
+                        >
+                          <label htmlFor={`inline-lux-${p.id}`} className="sr-only">
+                            Average daylight lux for {p.name}
+                          </label>
+                          <input
+                            id={`inline-lux-${p.id}`}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={150000}
+                            autoFocus
+                            value={inlineAvgLux}
+                            onChange={(e) => setInlineAvgLux(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void handleInlineSaveAvgLux(p);
+                              }
+                            }}
+                            className="w-28 min-h-[40px] px-3 py-1.5 rounded-lg border border-[#1F513B] bg-white text-sm font-mono tabular-nums text-[#18221D]"
+                          />
+                          <span className="text-xs text-[#4B5850]">lx</span>
+                          <button
+                            type="button"
+                            disabled={inlineSaving}
+                            onClick={() => void handleInlineSaveAvgLux(p)}
+                            className="min-h-[40px] px-3.5 py-1.5 rounded-lg bg-[#1F513B] text-white text-xs font-medium hover:bg-[#173E2D] disabled:opacity-50"
+                          >
+                            {inlineSaving ? 'Saving...' : 'Save'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingPlantId(null);
+                              setSelectedPlantId(p.id);
+                              setLuxValue(stats.avgRecordedLux);
+                              setLuxSource('manual');
+                              setSaveMode('set_average');
+                              manualInputRef.current?.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'center',
+                              });
+                              manualInputRef.current?.focus();
+                            }}
+                            className="min-h-[40px] px-3 py-1.5 rounded-lg border border-[#D4D8CE] bg-white text-xs text-[#4B5850] hover:text-[#18221D]"
+                          >
+                            Use Meter
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
