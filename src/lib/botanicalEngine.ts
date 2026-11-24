@@ -2,6 +2,7 @@ import {
   MonthlyTemp,
   PlantLog,
   PlantRecord,
+  PotSize,
   ScheduleFactor,
   SpeciesPreset,
   WateringCalculation,
@@ -649,5 +650,510 @@ export function buildLocalGrowthFallbackAssessment(params: {
     growthSummary: growthSummary.slice(0, 300),
     issueDetected,
     recommendedAction,
+  };
+}
+
+export interface BarcelonaSubstituteCandidate {
+  id: string;
+  speciesId: string;
+  commonName: string;
+  botanicalName: string;
+  nurseryNameES: string;
+  sizes: PotSize[];
+  sizeDimensions: Record<PotSize, string>;
+  minSurvivalLux: number;
+  idealLuxMin: number;
+  idealLuxMax: number;
+  resilienceScore: number; // 1-10 hardiness in Barcelona indoor conditions
+  barcelonaAvailability: string;
+  whyHardier: string;
+}
+
+export interface BarcelonaSubstituteRecommendation {
+  candidate: BarcelonaSubstituteCandidate;
+  fitLabel: 'Ideal Match' | 'Adapts Strongly' | 'Bright North Sill';
+  sizeLabel: string;
+  whyBetterHere: string;
+}
+
+export const POT_SIZE_LABEL: Record<PotSize, string> = {
+  small: 'Small (10–14 cm pot)',
+  medium: 'Medium (15–22 cm pot)',
+  large: 'Large (24–35+ cm floor pot)',
+};
+
+export const BARCELONA_SUBSTITUTE_CATALOG: BarcelonaSubstituteCandidate[] = [
+  {
+    id: 'aspidistra',
+    speciesId: 'cast_iron',
+    commonName: 'Cast Iron Plant',
+    botanicalName: 'Aspidistra elatior',
+    nurseryNameES: 'Aspidistra / Pilistra',
+    sizes: ['medium', 'large'],
+    sizeDimensions: {
+      small: '12 cm pot (~35 cm tall)',
+      medium: '17–20 cm pot (~55 cm tall)',
+      large: '25–30 cm floor pot (~80 cm tall)',
+    },
+    minSurvivalLux: 45,
+    idealLuxMin: 100,
+    idealLuxMax: 1200,
+    resilienceScore: 10,
+    barcelonaAvailability: 'Classic Barcelona patio & interior plant; stocked at Fronda, Vivers Barri, Jardiland & local floristeries',
+    whyHardier: 'Thrives in deep shade, cool winter drafts, and irregular watering.',
+  },
+  {
+    id: 'zenzi_zz',
+    speciesId: 'zz_plant',
+    commonName: 'Dwarf ZZ Plant (Zenzi)',
+    botanicalName: "Zamioculcas zamiifolia 'Zenzi'",
+    nurseryNameES: 'Zamioculca enana / Zenzi',
+    sizes: ['small'],
+    sizeDimensions: {
+      small: '12–14 cm pot (~30–40 cm tall)',
+      medium: '17 cm pot',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 50,
+    idealLuxMin: 100,
+    idealLuxMax: 1400,
+    resilienceScore: 10,
+    barcelonaAvailability: 'Widely stocked at Barcelona garden centers (Fronda, Verdecora, Jardiland)',
+    whyHardier: 'Compact thick rhizomes tolerate dim corners and 2–3 weeks between waterings.',
+  },
+  {
+    id: 'zz_plant',
+    speciesId: 'zz_plant',
+    commonName: 'ZZ Plant',
+    botanicalName: 'Zamioculcas zamiifolia',
+    nurseryNameES: 'Zamioculca',
+    sizes: ['medium', 'large'],
+    sizeDimensions: {
+      small: '12 cm pot',
+      medium: '17–21 cm pot (~55–70 cm tall)',
+      large: '26–32 cm floor pot (~90–110 cm tall)',
+    },
+    minSurvivalLux: 50,
+    idealLuxMin: 120,
+    idealLuxMax: 1400,
+    resilienceScore: 10,
+    barcelonaAvailability: 'Year-round staple at Fronda, Vivers Barri, Navarro Floristeria & Jardiland',
+    whyHardier: 'Stores water in tuberous rhizomes so it handles low north-window lux without leggy collapse.',
+  },
+  {
+    id: 'hahnii_snake',
+    speciesId: 'snake_plant',
+    commonName: "Bird's Nest Snake Plant",
+    botanicalName: "Dracaena trifasciata 'Hahnii'",
+    nurseryNameES: 'Sansevieria enana / Hahnii',
+    sizes: ['small'],
+    sizeDimensions: {
+      small: '11–14 cm pot (~20–25 cm rosette)',
+      medium: '16 cm pot',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 50,
+    idealLuxMin: 120,
+    idealLuxMax: 1800,
+    resilienceScore: 10,
+    barcelonaAvailability: 'Common in Barcelona plant shops, Fronda & Mercat de la Concepció florists',
+    whyHardier: 'Compact rosette shrugs off low winter light and dry indoor heating.',
+  },
+  {
+    id: 'snake_plant',
+    speciesId: 'snake_plant',
+    commonName: 'Snake Plant',
+    botanicalName: 'Dracaena trifasciata',
+    nurseryNameES: 'Sansevieria / Lengua de suegra',
+    sizes: ['medium', 'large'],
+    sizeDimensions: {
+      small: '12 cm pot',
+      medium: '17–21 cm pot (~50–70 cm tall)',
+      large: '25–30 cm floor pot (~90–120 cm tall)',
+    },
+    minSurvivalLux: 60,
+    idealLuxMin: 150,
+    idealLuxMax: 1800,
+    resilienceScore: 9.8,
+    barcelonaAvailability: 'Everywhere in Barcelona nurseries (Vivers Barri, Fronda, Verdecora, local florists)',
+    whyHardier: 'Rigid upright leaves keep shape in dim rooms and resist Barcelona summer heat.',
+  },
+  {
+    id: 'scindapsus',
+    speciesId: 'pothos',
+    commonName: 'Satin Pothos',
+    botanicalName: 'Scindapsus pictus',
+    nurseryNameES: 'Poto plateado / Scindapsus',
+    sizes: ['small', 'medium'],
+    sizeDimensions: {
+      small: '12–14 cm hanging/shelf pot',
+      medium: '16–19 cm pot',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 85,
+    idealLuxMin: 180,
+    idealLuxMax: 1500,
+    resilienceScore: 9.0,
+    barcelonaAvailability: 'Regularly stocked in Barcelona indoor shops, Fronda & Jardinarium',
+    whyHardier: 'Thicker velvety leaves curl gently to signal thirst and hold variegation in north light.',
+  },
+  {
+    id: 'aglaonema',
+    speciesId: 'custom',
+    commonName: 'Chinese Evergreen',
+    botanicalName: 'Aglaonema commutatum',
+    nurseryNameES: 'Aglaonema',
+    sizes: ['medium'],
+    sizeDimensions: {
+      small: '13 cm pot',
+      medium: '17–20 cm pot (~45–60 cm bushy)',
+      large: '25 cm pot',
+    },
+    minSurvivalLux: 90,
+    idealLuxMin: 180,
+    idealLuxMax: 1400,
+    resilienceScore: 9.3,
+    barcelonaAvailability: 'Widely available at Fronda, Verdecora & Barcelona garden centers',
+    whyHardier: 'One of the toughest leafy bushy plants for medium-to-low north skylight.',
+  },
+  {
+    id: 'philodendron',
+    speciesId: 'philodendron',
+    commonName: 'Heartleaf Philodendron',
+    botanicalName: 'Philodendron hederaceum',
+    nurseryNameES: 'Filodendro trepador',
+    sizes: ['small', 'medium'],
+    sizeDimensions: {
+      small: '12–14 cm shelf/hanging pot',
+      medium: '16–20 cm trailing/totem pot',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 100,
+    idealLuxMin: 220,
+    idealLuxMax: 1600,
+    resilienceScore: 9.1,
+    barcelonaAvailability: 'Standard stock at Fronda, Vivers Barri & city plant boutiques',
+    whyHardier: 'Grows steadily in indirect north daylight with forgiving watering tolerance.',
+  },
+  {
+    id: 'pothos',
+    speciesId: 'pothos',
+    commonName: 'Golden Pothos',
+    botanicalName: 'Epipremnum aureum',
+    nurseryNameES: 'Potos dorado',
+    sizes: ['small', 'medium'],
+    sizeDimensions: {
+      small: '12–14 cm pot',
+      medium: '16–20 cm trailing/totem pot',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 90,
+    idealLuxMin: 220,
+    idealLuxMax: 1600,
+    resilienceScore: 9.2,
+    barcelonaAvailability: 'Ubiquitous across Barcelona nurseries and neighborhood floristeries',
+    whyHardier: 'Fast-growing vine that adapts easily to 200–600 lux north rooms.',
+  },
+  {
+    id: 'fatsia',
+    speciesId: 'custom',
+    commonName: 'Japanese Aralia',
+    botanicalName: 'Fatsia japonica',
+    nurseryNameES: 'Aralia / Fatsia japonica',
+    sizes: ['large'],
+    sizeDimensions: {
+      small: '14 cm pot',
+      medium: '18 cm pot',
+      large: '24–32 cm floor pot (~85–120 cm canopy)',
+    },
+    minSurvivalLux: 120,
+    idealLuxMin: 240,
+    idealLuxMax: 1800,
+    resilienceScore: 9.1,
+    barcelonaAvailability: 'Mediterranean courtyard favorite stocked at Vivers Barri, Jardiland & Fronda',
+    whyHardier: 'Broad palmate leaves mimic Monstera size while thriving in cool shaded Barcelona light.',
+  },
+  {
+    id: 'kentia',
+    speciesId: 'parlor_palm',
+    commonName: 'Kentia Palm',
+    botanicalName: 'Howea forsteriana',
+    nurseryNameES: 'Palmera Kentia',
+    sizes: ['large'],
+    sizeDimensions: {
+      small: '14 cm pot',
+      medium: '19 cm pot',
+      large: '25–32 cm floor pot (~120–160 cm tall)',
+    },
+    minSurvivalLux: 140,
+    idealLuxMin: 250,
+    idealLuxMax: 1800,
+    resilienceScore: 8.9,
+    barcelonaAvailability: 'Classic Barcelona indoor palm at Fronda, Navarro & Vivers Barri',
+    whyHardier: 'Specifically prized for dim European apartments and 55–65% coastal humidity.',
+  },
+  {
+    id: 'chamaedorea',
+    speciesId: 'parlor_palm',
+    commonName: 'Parlor Palm',
+    botanicalName: 'Chamaedorea elegans',
+    nurseryNameES: 'Palmera de salón / Chamaedorea',
+    sizes: ['small', 'medium'],
+    sizeDimensions: {
+      small: '11–14 cm tabletop pot (~35 cm)',
+      medium: '16–20 cm pot (~55–75 cm)',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 120,
+    idealLuxMin: 250,
+    idealLuxMax: 1400,
+    resilienceScore: 8.7,
+    barcelonaAvailability: 'Always stocked at Fronda, Verdecora, Jardiland & local florists',
+    whyHardier: 'Flourishes under north skylight where sun-loving palms brown and decline.',
+  },
+  {
+    id: 'asplenium',
+    speciesId: 'boston_fern',
+    commonName: "Bird's Nest Fern",
+    botanicalName: 'Asplenium nidus',
+    nurseryNameES: 'Helecho nido de ave / Asplenium',
+    sizes: ['small', 'medium'],
+    sizeDimensions: {
+      small: '12–14 cm pot (~30 cm)',
+      medium: '16–19 cm pot (~45 cm)',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 120,
+    idealLuxMin: 250,
+    idealLuxMax: 1400,
+    resilienceScore: 8.6,
+    barcelonaAvailability: 'Common in Barcelona nurseries (Fronda, Jardiland, local floristeries)',
+    whyHardier: 'Thick glossy fronds hold moisture better than lacy Boston ferns in indoor air.',
+  },
+  {
+    id: 'peperomia',
+    speciesId: 'custom',
+    commonName: 'Baby Rubber Plant',
+    botanicalName: 'Peperomia obtusifolia',
+    nurseryNameES: 'Peperomia obtusifolia',
+    sizes: ['small'],
+    sizeDimensions: {
+      small: '11–14 cm desk/sill pot (~25 cm)',
+      medium: '16 cm pot',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 140,
+    idealLuxMin: 250,
+    idealLuxMax: 1500,
+    resilienceScore: 8.8,
+    barcelonaAvailability: 'Easy to find across Barcelona plant boutiques, Fronda & Verdecora',
+    whyHardier: 'Semi-succulent leaves tolerate slight drought and steady north-window brightness.',
+  },
+  {
+    id: 'peace_lily',
+    speciesId: 'peace_lily',
+    commonName: 'Peace Lily',
+    botanicalName: 'Spathiphyllum wallisii',
+    nurseryNameES: 'Espatifilo / Lirio de la paz',
+    sizes: ['medium'],
+    sizeDimensions: {
+      small: '12 cm pot',
+      medium: '16–20 cm pot (~45–60 cm)',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 150,
+    idealLuxMin: 300,
+    idealLuxMax: 1600,
+    resilienceScore: 8.5,
+    barcelonaAvailability: 'Year-round bestseller in Barcelona floristeries, Fronda & Vivers Barri',
+    whyHardier: 'Enjoys Barcelona’s ~60% RH indoor humidity and clearly signals when it needs water.',
+  },
+  {
+    id: 'dracaena_fragrans',
+    speciesId: 'custom',
+    commonName: 'Corn Plant',
+    botanicalName: 'Dracaena fragrans',
+    nurseryNameES: 'Tronco de Brasil',
+    sizes: ['large'],
+    sizeDimensions: {
+      small: '14 cm pot',
+      medium: '19 cm pot',
+      large: '24–30 cm floor pot (~110–150 cm tall)',
+    },
+    minSurvivalLux: 160,
+    idealLuxMin: 300,
+    idealLuxMax: 1800,
+    resilienceScore: 8.8,
+    barcelonaAvailability: 'Staple floor plant in every Barcelona nursery and garden center',
+    whyHardier: 'Woody cane holds moisture and stays architectural even a couple metres off north glass.',
+  },
+  {
+    id: 'calathea',
+    speciesId: 'calathea',
+    commonName: 'Peacock Calathea',
+    botanicalName: 'Goeppertia makoyana',
+    nurseryNameES: 'Calathea makoyana',
+    sizes: ['medium'],
+    sizeDimensions: {
+      small: '13 cm pot',
+      medium: '16–19 cm pot (~45 cm)',
+      large: '24 cm pot',
+    },
+    minSurvivalLux: 200,
+    idealLuxMin: 350,
+    idealLuxMax: 1300,
+    resilienceScore: 7.9,
+    barcelonaAvailability: 'Stocked at Fronda, Jardinarium, Verdecora & city plant stores',
+    whyHardier: 'North light protects patterned foliage from harsh sun fade while coastal RH keeps edges supple.',
+  },
+  {
+    id: 'dracaena_marginata',
+    speciesId: 'custom',
+    commonName: 'Dragon Tree',
+    botanicalName: 'Dracaena marginata',
+    nurseryNameES: 'Drácena marginata',
+    sizes: ['large'],
+    sizeDimensions: {
+      small: '14 cm pot',
+      medium: '19 cm pot',
+      large: '24–30 cm floor pot (~120–160 cm tall)',
+    },
+    minSurvivalLux: 240,
+    idealLuxMin: 400,
+    idealLuxMax: 2200,
+    resilienceScore: 8.4,
+    barcelonaAvailability: 'Widely stocked at Vivers Barri, Fronda & Jardiland Barcelona',
+    whyHardier: 'Slender multi-stem silhouette suits bright north window corners with minimal watering.',
+  },
+  {
+    id: 'monstera',
+    speciesId: 'monstera',
+    commonName: 'Monstera Deliciosa',
+    botanicalName: 'Monstera deliciosa',
+    nurseryNameES: 'Costilla de Adán',
+    sizes: ['large'],
+    sizeDimensions: {
+      small: '14 cm pot',
+      medium: '19 cm pot',
+      large: '24–32 cm floor pot (~90–130 cm)',
+    },
+    minSurvivalLux: 320,
+    idealLuxMin: 450,
+    idealLuxMax: 2200,
+    resilienceScore: 8.1,
+    barcelonaAvailability: 'Widely stocked across all Barcelona nurseries & boutiques',
+    whyHardier: 'Thrives right against bright north glass (450+ lx) in Barcelona humidity.',
+  },
+  {
+    id: 'ficus_elastica',
+    speciesId: 'ficus_elastica',
+    commonName: 'Rubber Fig',
+    botanicalName: 'Ficus elastica',
+    nurseryNameES: 'Ficus robusta',
+    sizes: ['large'],
+    sizeDimensions: {
+      small: '14 cm pot',
+      medium: '19 cm pot',
+      large: '24–32 cm floor pot (~100–150 cm)',
+    },
+    minSurvivalLux: 380,
+    idealLuxMin: 550,
+    idealLuxMax: 2500,
+    resilienceScore: 8.2,
+    barcelonaAvailability: 'Stocked year-round at Fronda, Vivers Barri, Verdecora & Jardiland',
+    whyHardier: 'Thick glossy leaves thrive on bright north sills without direct scorching sun.',
+  },
+];
+
+export function getBarcelonaSubstitutesForPlant(
+  plant: PlantRecord,
+  monthlyTemps: MonthlyTemp[],
+  now = new Date(),
+  limit = 3,
+): {
+  positionLux: number;
+  currentNeedsBetterLight: boolean;
+  calc: WateringCalculation;
+  recommendations: BarcelonaSubstituteRecommendation[];
+} {
+  const calc = calculateWateringSchedule(plant, monthlyTemps, now);
+  const positionLux = Math.round(plant.avgLux ?? plant.latestLux);
+  const currentMinLux = plant.idealLuxMin ?? 250;
+  const currentNeedsBetterLight = positionLux < currentMinLux || calc.lightAssessment === 'Too Dim';
+
+  const currentSpeciesLower = plant.speciesName.trim().toLowerCase();
+  const currentBotanicalLower = (plant.botanicalName ?? '').trim().toLowerCase();
+
+  const sameSizeCandidates = BARCELONA_SUBSTITUTE_CATALOG.filter((c) => {
+    if (!c.sizes.includes(plant.potSize)) return false;
+    if (c.speciesId !== 'custom' && c.speciesId === plant.speciesId && c.id === plant.speciesId) {
+      return false;
+    }
+    const candBot = c.botanicalName.toLowerCase();
+    const candCommon = c.commonName.toLowerCase();
+    if (
+      (currentBotanicalLower && candBot.includes(currentBotanicalLower)) ||
+      (currentSpeciesLower && (candCommon === currentSpeciesLower || candBot === currentSpeciesLower))
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  const scored = sameSizeCandidates
+    .map((candidate) => {
+      const inIdealBand =
+        positionLux >= candidate.idealLuxMin && positionLux <= candidate.idealLuxMax;
+      const survivesHere = positionLux >= candidate.minSurvivalLux;
+
+      let score = candidate.resilienceScore * 10;
+      if (inIdealBand) {
+        score += 45;
+      } else if (survivesHere) {
+        score += 22;
+      } else {
+        // Penalize candidates whose minimum survival lux is still above this dark spot
+        score -= (candidate.minSurvivalLux - positionLux) * 0.8;
+      }
+
+      // Bonus for actually having a lower light requirement than the struggling current plant
+      if (candidate.idealLuxMin < currentMinLux) {
+        score += Math.min(25, (currentMinLux - candidate.idealLuxMin) * 0.08);
+      }
+
+      // Bonus for matching coastal Barcelona humidity effortlessly
+      if (calc.effectiveHumidityPct < 50 && candidate.resilienceScore >= 9) {
+        score += 8;
+      }
+
+      const fitLabel: BarcelonaSubstituteRecommendation['fitLabel'] = inIdealBand
+        ? 'Ideal Match'
+        : survivesHere
+          ? 'Adapts Strongly'
+          : 'Bright North Sill';
+
+      const whyBetterHere = currentNeedsBetterLight
+        ? `Grows in ${candidate.idealLuxMin}–${candidate.idealLuxMax} lx (survives down to ${candidate.minSurvivalLux} lx) vs. your ${plant.speciesName}'s ${currentMinLux}+ lx need at this ${positionLux} lx spot. ${candidate.whyHardier}`
+        : `Fits this ${positionLux} lx position (${candidate.idealLuxMin}–${candidate.idealLuxMax} lx target). ${candidate.whyHardier}`;
+
+      return {
+        score,
+        recommendation: {
+          candidate,
+          fitLabel,
+          sizeLabel: candidate.sizeDimensions[plant.potSize],
+          whyBetterHere,
+        },
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((item) => item.recommendation);
+
+  return {
+    positionLux,
+    currentNeedsBetterLight,
+    calc,
+    recommendations: scored,
   };
 }

@@ -5,14 +5,18 @@ import {
   Clock,
   Droplets,
   Leaf,
+  MapPin,
   Plus,
   Search,
+  Sprout,
   Sun,
 } from 'lucide-react';
 import {
   BARCELONA_MONTHLY_BASELINE,
+  POT_SIZE_LABEL,
   calculateWateringSchedule,
   formatDueSummary,
+  getBarcelonaSubstitutesForPlant,
   getCurrentMonthKey,
   getPlantAverageLuxStats,
 } from '../lib/botanicalEngine';
@@ -79,6 +83,20 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
         .length,
     [plants, monthlyTemps, now],
   );
+
+  const substitutesByPosition = useMemo(() => {
+    return plants
+      .map((plant) => ({
+        plant,
+        ...getBarcelonaSubstitutesForPlant(plant, monthlyTemps, now, 3),
+      }))
+      .sort((a, b) => {
+        if (a.currentNeedsBetterLight !== b.currentNeedsBetterLight) {
+          return a.currentNeedsBetterLight ? -1 : 1;
+        }
+        return a.positionLux - b.positionLux;
+      });
+  }, [plants, monthlyTemps, now]);
 
   const handleWater = async (e: React.MouseEvent, plant: PlantRecord) => {
     e.stopPropagation();
@@ -333,6 +351,121 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
             );
           })}
         </div>
+      )}
+
+      {/* Better-Surviving Barcelona Substitutes by Position */}
+      {substitutesByPosition.length > 0 && (
+        <section
+          aria-labelledby="barcelona-substitutes-heading"
+          className="pt-6 border-t border-[#E4E6DF] space-y-4"
+        >
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-[#1F513B]">
+              <Sprout className="w-4 h-4 shrink-0" />
+              <span className="text-xs font-semibold uppercase tracking-wide">
+                Barcelona Nursery Picks
+              </span>
+            </div>
+            <h2
+              id="barcelona-substitutes-heading"
+              className="text-xl font-semibold tracking-tight text-[#18221D]"
+            >
+              Better-Surviving Substitutes by Position
+            </h2>
+            <p className="text-sm text-[#4B5850]">
+              Matched to each plant&apos;s pot size, stocked in Barcelona nurseries, and suited to
+              the measured daylight lux of that exact position.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {substitutesByPosition.map(
+              ({plant, positionLux, currentNeedsBetterLight, recommendations}) => (
+                <div
+                  key={`sub-${plant.id}`}
+                  className="rounded-2xl bg-white border border-[#E4E6DF] p-4 sm:p-5 space-y-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-[#EEF0EA]">
+                    <div className="min-w-0 space-y-0.5">
+                      <button
+                        type="button"
+                        onClick={() => onSelectPlant(plant)}
+                        className="text-base font-semibold text-[#18221D] hover:text-[#1F513B] hover:underline text-left"
+                      >
+                        {plant.entryType === 'group'
+                          ? `${plant.quantity}× ${plant.name}`
+                          : plant.name}
+                      </button>
+                      <p className="text-xs text-[#4B5850]">
+                        Current:{' '}
+                        <span className="font-serif italic">{plant.speciesName}</span> ·{' '}
+                        {POT_SIZE_LABEL[plant.potSize]} ·{' '}
+                        <span className="font-mono tabular-nums font-medium text-[#18221D]">
+                          {positionLux} lx avg
+                        </span>
+                      </p>
+                    </div>
+
+                    <div
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${
+                        currentNeedsBetterLight
+                          ? 'bg-amber-50 border-amber-200 text-[#B45309]'
+                          : 'bg-[#EEF4F0] border-[#CFE0D5] text-[#1F513B]'
+                      }`}
+                    >
+                      {currentNeedsBetterLight
+                        ? `Current species needs ${plant.idealLuxMin ?? 250}+ lx`
+                        : 'Light fits · hardier alternatives'}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {recommendations.map(({candidate, fitLabel, sizeLabel, whyBetterHere}) => (
+                      <div
+                        key={`${plant.id}-${candidate.id}`}
+                        className="rounded-xl border border-[#E4E6DF] bg-[#FAFBF8] p-3.5 flex flex-col justify-between gap-2.5"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h3 className="text-sm font-semibold text-[#18221D]">
+                                {candidate.commonName}
+                              </h3>
+                              <p className="text-[11px] font-serif italic text-[#4B5850]">
+                                {candidate.botanicalName}
+                              </p>
+                            </div>
+                            <span className="text-[11px] font-medium text-[#1F513B] bg-[#EEF4F0] px-2 py-0.5 rounded-md shrink-0">
+                              {fitLabel}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-[#18221D]">
+                            <span className="font-medium">Ask in Barcelona:</span>{' '}
+                            {candidate.nurseryNameES}
+                          </p>
+
+                          <p className="text-[11px] font-mono tabular-nums text-[#4B5850]">
+                            Size: {sizeLabel} · {candidate.idealLuxMin}–{candidate.idealLuxMax} lx
+                          </p>
+
+                          <p className="text-xs text-[#323E37] leading-relaxed">
+                            {whyBetterHere}
+                          </p>
+                        </div>
+
+                        <p className="pt-2 border-t border-[#E8EAE3] text-[11px] text-[#4B5850] flex items-start gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-[#1F513B] shrink-0 mt-0.5" />
+                          <span>{candidate.barcelonaAvailability}</span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ),
+            )}
+          </div>
+        </section>
       )}
     </div>
   );

@@ -10,18 +10,22 @@ import {
   Globe,
   Leaf,
   Loader2,
+  MapPin,
   Pencil,
   RefreshCw,
+  Sprout,
   Sun,
   Trash2,
   TrendingUp,
   X,
 } from 'lucide-react';
 import {
+  POT_SIZE_LABEL,
   buildLocalGrowthFallbackAssessment,
   calculateWateringSchedule,
   formatDueSummary,
   getBarcelonaPeakWindow,
+  getBarcelonaSubstitutesForPlant,
   getPlantAverageLuxStats,
 } from '../lib/botanicalEngine';
 import {
@@ -102,6 +106,7 @@ export const PlantDetailModal: React.FC<PlantDetailModalProps> = ({
   const calc = calculateWateringSchedule(plant, monthlyTemps, now);
   const luxStats = getPlantAverageLuxStats(plant, logs, now);
   const peakWindow = getBarcelonaPeakWindow(now);
+  const substitutes = getBarcelonaSubstitutesForPlant(plant, monthlyTemps, now, 3);
   const nextDateLabel = calc.nextWaterDate.toLocaleDateString('en-GB', {
     weekday: 'short',
     day: 'numeric',
@@ -866,6 +871,58 @@ export const PlantDetailModal: React.FC<PlantDetailModalProps> = ({
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Better-Suited Barcelona Substitutes for This Position */}
+            <div className="space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Sprout className="w-4 h-4 text-[#1F513B]" />
+                  <h3 className="text-sm font-semibold text-[#18221D]">
+                    Barcelona Substitutes for This Spot
+                  </h3>
+                </div>
+                <span className="text-[11px] font-mono tabular-nums text-[#4B5850]">
+                  {POT_SIZE_LABEL[plant.potSize]} · {substitutes.positionLux} lx avg
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {substitutes.recommendations.map(({candidate, fitLabel, sizeLabel, whyBetterHere}) => (
+                  <div
+                    key={`detail-sub-${candidate.id}`}
+                    className="rounded-xl border border-[#E4E6DF] bg-[#FAFBF8] p-3 flex flex-col justify-between gap-2"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-start justify-between gap-1.5">
+                        <div className="min-w-0">
+                          <span className="text-xs font-semibold text-[#18221D] block">
+                            {candidate.commonName}
+                          </span>
+                          <span className="text-[11px] font-serif italic text-[#4B5850] block">
+                            {candidate.botanicalName}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-medium text-[#1F513B] bg-[#EEF4F0] px-1.5 py-0.5 rounded-md shrink-0">
+                          {fitLabel}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#18221D]">
+                        <span className="font-medium">ES:</span> {candidate.nurseryNameES}
+                      </p>
+                      <p className="text-[11px] font-mono tabular-nums text-[#4B5850]">
+                        {sizeLabel} · {candidate.idealLuxMin}–{candidate.idealLuxMax} lx
+                      </p>
+                      <p className="text-[11px] text-[#323E37] leading-relaxed">
+                        {whyBetterHere}
+                      </p>
+                    </div>
+                    <p className="pt-1.5 border-t border-[#E8EAE3] text-[10px] text-[#4B5850] flex items-start gap-1">
+                      <MapPin className="w-3 h-3 text-[#1F513B] shrink-0 mt-0.5" />
+                      <span>{candidate.barcelonaAvailability}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Footer Edit / Delete */}
