@@ -118,7 +118,7 @@ jobs:
         run: |
           mkdir -p ~/.android
           if [ -n "$ANDROID_DEBUG_KEYSTORE_BASE64" ]; then
-            printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 -d > ~/.android/debug.keystore
+            printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > ~/.android/debug.keystore
             echo "Restored ~/.android/debug.keystore from ANDROID_DEBUG_KEYSTORE_BASE64 secret."
           elif [ ! -f ~/.android/debug.keystore ]; then
             keytool -genkeypair -v \
