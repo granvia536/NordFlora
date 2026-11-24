@@ -3,6 +3,7 @@ import {
   Bell,
   Check,
   ChevronRight,
+  Clock,
   Droplets,
   Leaf,
   Plus,
@@ -32,6 +33,7 @@ interface WidgetHomeViewProps {
   onOpenFullSchedule: (filter?: 'all' | 'due') => void;
   onSelectPlant: (plant: PlantRecord) => void;
   onWaterPlant: (plant: PlantRecord) => Promise<void>;
+  onSnoozeDamp: (plant: PlantRecord) => Promise<void>;
   onAddPlant: () => void;
   onOpenClimate: () => void;
   onOpenLux: (targetPlantId?: string) => void;
@@ -43,12 +45,14 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
   onOpenFullSchedule,
   onSelectPlant,
   onWaterPlant,
+  onSnoozeDamp,
   onAddPlant,
   onOpenClimate,
   onOpenLux,
 }) => {
   const [widgetSize, setWidgetSize] = useState<'compact' | 'detailed'>('detailed');
   const [wateringId, setWateringId] = useState<string | null>(null);
+  const [snoozingId, setSnoozingId] = useState<string | null>(null);
   const [notifStatus, setNotifStatus] = useState<NotificationPermission | 'unsupported'>(() =>
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
   );
@@ -59,6 +63,7 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
   const recordedTemp = monthlyTemps.find((m) => m.monthKey === currentMonthKey);
   const displayTempC = recordedTemp?.avgTempC ?? monthBaseline.avgIndoorTempC;
   const displayHumidityPct = recordedTemp?.humidityPct ?? monthBaseline.avgHumidityPct;
+  const displayDaylightHours = recordedTemp?.daylightHours ?? monthBaseline.daylightHours;
 
   const calculated: PlantWithCalc[] = plants
     .map((plant) => ({
@@ -94,6 +99,16 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
       await onWaterPlant(plant);
     } finally {
       setWateringId(null);
+    }
+  };
+
+  const handleQuickSnooze = async (e: React.MouseEvent, plant: PlantRecord) => {
+    e.stopPropagation();
+    setSnoozingId(plant.id);
+    try {
+      await onSnoozeDamp(plant);
+    } finally {
+      setSnoozingId(null);
     }
   };
 
@@ -252,7 +267,7 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
                 ).map(({plant, calc}) => (
                   <div
                     key={plant.id}
-                    className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#FAFBF8] transition-colors"
+                    className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#FAFBF8] transition-colors"
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
                       {plant.photoDataUrl ? (
@@ -296,12 +311,22 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 sm:justify-end">
                       <button
                         type="button"
-                        disabled={wateringId === plant.id}
+                        disabled={wateringId === plant.id || snoozingId === plant.id}
+                        onClick={(e) => void handleQuickSnooze(e, plant)}
+                        className="flex-1 sm:flex-none min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#4B5850] hover:text-[#18221D] hover:bg-[#F0F1EC] text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap"
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{snoozingId === plant.id ? 'Snoozing...' : 'Damp +2d'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={wateringId === plant.id || snoozingId === plant.id}
                         onClick={(e) => void handleQuickWater(e, plant)}
-                        className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#EEF4F0] text-[#1F513B] hover:bg-[#1F513B] hover:text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                        className="flex-1 sm:flex-none min-h-[44px] px-3.5 py-2 rounded-xl bg-[#EEF4F0] text-[#1F513B] hover:bg-[#1F513B] hover:text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap"
                       >
                         <Droplets className="w-3.5 h-3.5" />
                         <span>{wateringId === plant.id ? 'Saving...' : 'Watered'}</span>
@@ -376,7 +401,7 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
                   Barcelona North Window
                 </h2>
                 <p className="text-xs text-[#4B5850] mt-0.5">
-                  41.39°N · {monthBaseline.monthName} photoperiod {monthBaseline.daylightHours}h
+                  41.39°N · {monthBaseline.monthName} daylight {displayDaylightHours.toFixed(1)}h
                 </p>
               </div>
               <button
@@ -482,6 +507,7 @@ export const WidgetHomeView: React.FC<WidgetHomeViewProps> = ({
                         </span>
                       </div>
                       <span className="text-xs font-mono tabular-nums text-[#4B5850] shrink-0">
+                        {calc.isSnoozed ? 'Snoozed · ' : ''}
                         {formatDueSummary(calc.daysUntilWater)}
                       </span>
                     </button>

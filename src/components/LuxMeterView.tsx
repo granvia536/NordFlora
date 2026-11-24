@@ -36,6 +36,7 @@ interface LuxMeterViewProps {
     source: LuxSource,
     readingPeriod: 'peak_noon' | 'general',
     note?: string,
+    mode?: 'append' | 'set_average',
   ) => Promise<void>;
 }
 
@@ -54,6 +55,7 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
   const [luxValue, setLuxValue] = useState<number>(350);
   const [luxSource, setLuxSource] = useState<LuxSource>('manual');
   const [readingPeriod, setReadingPeriod] = useState<'peak_noon' | 'general'>('peak_noon');
+  const [saveMode, setSaveMode] = useState<'append' | 'set_average'>('append');
   const [noteInput, setNoteInput] = useState<string>('');
   const [sensorActive, setSensorActive] = useState(false);
   const [sensorName, setSensorName] = useState<string | null>(null);
@@ -369,12 +371,15 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
     ? getPlantAverageLuxStats(selectedPlant, undefined, now)
     : null;
 
-  const previewNewAvg = selectedStats
-    ? Math.round(
-        (selectedStats.avgRecordedLux * selectedStats.readingCount + luxValue) /
-          (selectedStats.readingCount + 1),
-      )
-    : luxValue;
+  const previewNewAvg =
+    saveMode === 'set_average'
+      ? luxValue
+      : selectedStats
+        ? Math.round(
+            (selectedStats.avgRecordedLux * selectedStats.readingCount + luxValue) /
+              (selectedStats.readingCount + 1),
+          )
+        : luxValue;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -388,19 +393,23 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
         luxSource,
         readingPeriod,
         noteInput.trim() || undefined,
+        saveMode,
       );
       const targetName = selectedPlant?.name ?? 'Plant';
       setSavedFeedback(
-        `Saved ${luxValue} lux to ${targetName} · New avg ${previewNewAvg} lx`,
+        saveMode === 'set_average'
+          ? `Updated average daylight for ${targetName} to ${luxValue} lx`
+          : `Saved ${luxValue} lux to ${targetName} · New avg ${previewNewAvg} lx`,
       );
       setNoteInput('');
       stopCameraEstimator();
       await stopPhoneSensor();
 
-      // Advance smoothly to the next plant due this month if any remain
-      const remainingDue = duePlants.filter((p) => p.id !== selectedPlantId);
-      if (remainingDue.length > 0) {
-        setSelectedPlantId(remainingDue[0].id);
+      if (saveMode === 'append') {
+        const remainingDue = duePlants.filter((p) => p.id !== selectedPlantId);
+        if (remainingDue.length > 0) {
+          setSelectedPlantId(remainingDue[0].id);
+        }
       }
     } finally {
       setSaving(false);
@@ -720,6 +729,37 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
               />
             </div>
 
+            {/* Save Mode: Rolling Average vs Direct Set/Edit */}
+            <div className="space-y-1.5">
+              <span className="block text-xs font-medium text-[#4B5850]">
+                How to Apply This Reading
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-1 rounded-xl bg-[#EAECE5]">
+                <button
+                  type="button"
+                  onClick={() => setSaveMode('append')}
+                  className={`min-h-[40px] px-3 rounded-lg text-xs font-medium transition-colors ${
+                    saveMode === 'append'
+                      ? 'bg-white text-[#18221D] shadow-xs'
+                      : 'text-[#4B5850] hover:text-[#18221D]'
+                  }`}
+                >
+                  Add to Rolling Average
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSaveMode('set_average')}
+                  className={`min-h-[40px] px-3 rounded-lg text-xs font-medium transition-colors ${
+                    saveMode === 'set_average'
+                      ? 'bg-white text-[#18221D] shadow-xs'
+                      : 'text-[#4B5850] hover:text-[#18221D]'
+                  }`}
+                >
+                  Set / Replace Avg Daylight
+                </button>
+              </div>
+            </div>
+
             {/* Live Average Lux Calculation Preview */}
             {selectedPlant && selectedStats && (
               <div className="rounded-xl bg-[#FAFBF8] border border-[#EEF0EA] px-4 py-3 grid grid-cols-3 gap-3 text-xs">
@@ -739,7 +779,9 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                     {previewNewAvg} lx
                   </span>
                   <span className="text-[11px] text-[#4B5850] block">
-                    {selectedStats.readingCount + 1} readings
+                    {saveMode === 'set_average'
+                      ? 'Direct replacement'
+                      : `${selectedStats.readingCount + 1} readings`}
                   </span>
                 </div>
                 <div>
@@ -760,7 +802,9 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                 </span>
               ) : (
                 <span className="text-xs text-[#4B5850]">
-                  Updates this plant&apos;s average daylight lux &amp; watering schedule.
+                  {saveMode === 'set_average'
+                    ? 'Directly overrides this plant’s average daylight lux & updates watering.'
+                    : 'Updates this plant’s rolling average daylight lux & watering schedule.'}
                 </span>
               )}
 
@@ -769,7 +813,11 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                 disabled={saving || plants.length === 0}
                 className="min-h-[44px] px-5 py-2 rounded-xl bg-[#1F513B] text-white text-sm font-medium hover:bg-[#173E2D] disabled:opacity-50 whitespace-nowrap"
               >
-                {saving ? 'Saving...' : 'Save Lux Reading'}
+                {saving
+                  ? 'Saving...'
+                  : saveMode === 'set_average'
+                    ? 'Set Average Daylight'
+                    : 'Save Lux Reading'}
               </button>
             </div>
           </form>
@@ -793,11 +841,10 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                 {plants.map((p) => {
                   const stats = getPlantAverageLuxStats(p, undefined, now);
                   return (
-                    <button
+                    <div
                       key={p.id}
-                      type="button"
                       onClick={() => setSelectedPlantId(p.id)}
-                      className={`w-full py-2.5 px-2 rounded-xl flex items-center justify-between gap-3 text-left transition-colors ${
+                      className={`py-2.5 px-2 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-colors ${
                         p.id === selectedPlantId ? 'bg-[#EEF4F0]/60' : 'hover:bg-[#FAFBF8]'
                       }`}
                     >
@@ -817,15 +864,30 @@ export const LuxMeterView: React.FC<LuxMeterViewProps> = ({
                           )}
                         </p>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className="text-sm font-semibold font-mono tabular-nums text-[#18221D] block">
-                          {stats.avgRecordedLux} lx avg
-                        </span>
-                        <span className="text-[11px] font-mono tabular-nums text-[#4B5850] block">
-                          ~{stats.estimatedFullDayLux} lx day
-                        </span>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="text-right">
+                          <span className="text-sm font-semibold font-mono tabular-nums text-[#18221D] block">
+                            {stats.avgRecordedLux} lx avg
+                          </span>
+                          <span className="text-[11px] font-mono tabular-nums text-[#4B5850] block">
+                            ~{stats.estimatedFullDayLux} lx day
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPlantId(p.id);
+                            setLuxValue(stats.avgRecordedLux);
+                            setLuxSource('manual');
+                            setSaveMode('set_average');
+                          }}
+                          className="min-h-[36px] px-2.5 py-1 rounded-lg border border-[#D4D8CE] bg-white text-xs font-medium text-[#1F513B] hover:bg-[#EEF4F0] whitespace-nowrap"
+                        >
+                          Edit
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

@@ -123,6 +123,15 @@
           "maxLength": 40,
           "description": "ISO 8601 timestamp of when this plant or group was last watered."
         },
+        "snoozedUntilAt": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "ISO 8601 timestamp until which watering is snoozed after a still-damp check, or empty string."
+        },
+        "dampSnoozeCount": {
+          "type": "integer",
+          "description": "Count of still-damp snooze checks used to calibrate baseWaterDays."
+        },
         "notes": {
           "type": "string",
           "maxLength": 300,
@@ -193,7 +202,7 @@
         },
         "logType": {
           "type": "string",
-          "enum": ["water", "lux"],
+          "enum": ["water", "lux", "snooze"],
           "description": "Event category."
         },
         "luxValue": {
@@ -286,6 +295,10 @@
           "enum": ["none", "heating", "ac", "natural_vent"],
           "description": "Indoor climate conditioning mode."
         },
+        "daylightHours": {
+          "type": "number",
+          "description": "Recorded effective average daylight hours per day for this month (0.5 to 18)."
+        },
         "note": {
           "type": "string",
           "maxLength": 200,
@@ -315,6 +328,89 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "PlantGrowthPhoto": {
+      "title": "PlantGrowthPhoto",
+      "description": "Timestamped progress photo and AI growth/health diagnosis for tracking plant development over time.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Growth photo ID."
+        },
+        "ownerId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Owner UID."
+        },
+        "plantId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Parent plant document ID."
+        },
+        "photoDataUrl": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 180000,
+          "description": "Compressed JPEG data URL of the plant progress photo."
+        },
+        "healthStatus": {
+          "type": "string",
+          "enum": ["thriving", "watch", "issue"],
+          "description": "Overall plant growth and health state."
+        },
+        "growthSummary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "Observed growth progress and foliage vigor."
+        },
+        "issueDetected": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "What appears wrong if growth is not optimal, or empty string."
+        },
+        "recommendedAction": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "Actionable care adjustment for Barcelona north-window conditions."
+        },
+        "avgLuxSnapshot": {
+          "type": "number",
+          "description": "Plant average daylight lux at the time of photo."
+        },
+        "recordedAt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 40,
+          "description": "ISO 8601 timestamp when the photo was captured."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "plantId",
+        "photoDataUrl",
+        "healthStatus",
+        "growthSummary",
+        "issueDetected",
+        "recommendedAction",
+        "avgLuxSnapshot",
+        "recordedAt",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -325,6 +421,10 @@
     "/users/{userId}/plants/{plantId}/logs/{logId}": {
       "schema": { "$ref": "#/entities/PlantLog" },
       "description": "Watering and lux measurement log entries for a plant or group."
+    },
+    "/users/{userId}/plants/{plantId}/growthPhotos/{photoId}": {
+      "schema": { "$ref": "#/entities/PlantGrowthPhoto" },
+      "description": "Chronological plant progress photos with growth & health diagnosis."
     },
     "/users/{userId}/monthlyTemps/{monthId}": {
       "schema": { "$ref": "#/entities/MonthlyTemp" },

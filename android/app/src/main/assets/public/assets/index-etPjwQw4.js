@@ -23358,7 +23358,7 @@ var ProviderId;
 	ProviderId["PHONE"] = "phone";
 })(ProviderId || (ProviderId = {}));
 // node_modules/@capacitor-firebase/authentication/dist/esm/index.js
-var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-Vi74w4C9.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
+var FirebaseAuthentication = registerPlugin("FirebaseAuthentication", { web: () => __vitePreload(() => import("./web-Cm09hEqr.js").then((m) => new m.FirebaseAuthenticationWeb()), []) });
 // node_modules/lucide-react/dist/esm/shared/src/utils.js
 /**
 * @license lucide-react v0.546.0 - ISC
@@ -23530,6 +23530,21 @@ var ChevronRight = createLucideIcon("chevron-right", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var CircleCheck = createLucideIcon("circle-check", [["circle", {
+	cx: "12",
+	cy: "12",
+	r: "10",
+	key: "1mglay"
+}], ["path", {
+	d: "m9 12 2 2 4-4",
+	key: "dzmm74"
+}]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Clock = createLucideIcon("clock", [["path", {
 	d: "M12 6v6l4 2",
 	key: "mmk7yg"
@@ -23592,6 +23607,21 @@ var ExternalLink = createLucideIcon("external-link", [
 		key: "a6xqqp"
 	}]
 ]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Eye = createLucideIcon("eye", [["path", {
+	d: "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0",
+	key: "1nclc0"
+}], ["circle", {
+	cx: "12",
+	cy: "12",
+	r: "3",
+	key: "1v7zrd"
+}]]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
@@ -23925,6 +23955,39 @@ var Trash2 = createLucideIcon("trash-2", [
 	["path", {
 		d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
 		key: "e791ji"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var TrendingUp = createLucideIcon("trending-up", [["path", {
+	d: "M16 7h6v6",
+	key: "box55l"
+}], ["path", {
+	d: "m22 7-8.5 8.5-5-5L2 17",
+	key: "1t1m79"
+}]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var TriangleAlert = createLucideIcon("triangle-alert", [
+	["path", {
+		d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3",
+		key: "wmoenq"
+	}],
+	["path", {
+		d: "M12 9v4",
+		key: "juzpu7"
+	}],
+	["path", {
+		d: "M12 17h.01",
+		key: "p32p05"
 	}]
 ]);
 /**
@@ -24643,12 +24706,14 @@ function calculateWateringSchedule(plant, monthlyTemps, now = /* @__PURE__ */ ne
 		multiplier: tempMult,
 		detail: `${effectiveTempC.toFixed(1)}°C`
 	});
-	const photoDelta = baseline.daylightHours - 12;
-	const photoMult = Math.max(.88, Math.min(1.14, Number((1 - photoDelta * .032).toFixed(2))));
+	const effectiveDaylightHours = recordedMonth?.daylightHours ?? baseline.daylightHours;
+	const daylightSource = recordedMonth?.daylightHours !== void 0 ? "recorded" : "baseline";
+	const photoDelta = effectiveDaylightHours - 12;
+	const photoMult = Math.max(.84, Math.min(1.18, Number((1 - photoDelta * .032).toFixed(2))));
 	factors.push({
-		label: "Barcelona north photoperiod",
+		label: daylightSource === "recorded" ? "Recorded daylight hours" : "Barcelona north photoperiod",
 		multiplier: photoMult,
-		detail: `${baseline.daylightHours.toFixed(1)}h daylight (${baseline.shortName})`
+		detail: `${effectiveDaylightHours.toFixed(1)}h/day (${baseline.shortName})`
 	});
 	const humidityDelta = effectiveHumidityPct - 60;
 	const humidityMult = Math.max(.85, Math.min(1.15, Number((1 + humidityDelta * .004).toFixed(2))));
@@ -24672,7 +24737,19 @@ function calculateWateringSchedule(plant, monthlyTemps, now = /* @__PURE__ */ ne
 	const wateredStart = startOfLocalDay(Number.isNaN(lastWatered.getTime()) ? now : lastWatered);
 	const msPerDay = 864e5;
 	const daysSinceWatered = Math.max(0, Math.round((todayStart.getTime() - wateredStart.getTime()) / msPerDay));
-	const nextWaterDate = new Date(wateredStart.getTime() + adjustedIntervalDays * msPerDay);
+	const formulaNextDate = new Date(wateredStart.getTime() + adjustedIntervalDays * msPerDay);
+	let nextWaterDate = formulaNextDate;
+	let isSnoozed = false;
+	if (plant.snoozedUntilAt) {
+		const parsedSnooze = new Date(plant.snoozedUntilAt);
+		if (!Number.isNaN(parsedSnooze.getTime())) {
+			const snoozeDay = startOfLocalDay(parsedSnooze);
+			if (snoozeDay.getTime() > wateredStart.getTime() && snoozeDay.getTime() > formulaNextDate.getTime()) {
+				nextWaterDate = snoozeDay;
+				isSnoozed = true;
+			}
+		}
+	}
 	const daysUntilWater = Math.round((nextWaterDate.getTime() - todayStart.getTime()) / msPerDay);
 	let status = "hydrated";
 	if (daysUntilWater < 0) status = "overdue";
@@ -24694,8 +24771,27 @@ function calculateWateringSchedule(plant, monthlyTemps, now = /* @__PURE__ */ ne
 		tempSource,
 		effectiveTempC,
 		effectiveHumidityPct,
-		daylightHours: baseline.daylightHours,
+		daylightHours: effectiveDaylightHours,
+		isSnoozed,
 		factors
+	};
+}
+function computeDampSnoozeCalibration(plant, monthlyTemps, now = /* @__PURE__ */ new Date(), snoozeDays = 2) {
+	const msPerDay = 864e5;
+	const todayStart = startOfLocalDay(now);
+	const currentCalc = calculateWateringSchedule(plant, monthlyTemps, now);
+	const anchorMs = Math.max(todayStart.getTime(), currentCalc.nextWaterDate.getTime());
+	const targetDay = new Date(anchorMs + snoozeDays * msPerDay);
+	const snoozedUntilAt = new Date(targetDay.getFullYear(), targetDay.getMonth(), targetDay.getDate(), 12, 0, 0).toISOString();
+	const currentBase = Math.max(1, Math.min(90, Number(plant.baseWaterDays) || 7));
+	const rawStep = Math.min(1.5, Math.max(.5, Number((currentBase * .1).toFixed(1))));
+	const nextBaseWaterDays = Math.min(90, Number((currentBase + rawStep).toFixed(1)));
+	const stepDays = Number((nextBaseWaterDays - currentBase).toFixed(1));
+	return {
+		snoozedUntilAt,
+		nextBaseWaterDays,
+		nextDampSnoozeCount: Math.min(1e3, Math.max(0, Math.round(plant.dampSnoozeCount ?? 0)) + 1),
+		stepDays
 	};
 }
 function formatDueSummary(daysUntilWater) {
@@ -24705,10 +24801,40 @@ function formatDueSummary(daysUntilWater) {
 	if (daysUntilWater === 1) return "Tomorrow";
 	return `In ${daysUntilWater}d`;
 }
+function buildLocalGrowthFallbackAssessment(params) {
+	const { plant, calc, avgRecordedLux, hasPreviousPhoto } = params;
+	const minLux = plant.idealLuxMin ?? 250;
+	const maxLux = plant.idealLuxMax ?? 1600;
+	const issues = [];
+	const actions = [];
+	if (avgRecordedLux < minLux) {
+		issues.push(`Average light (${Math.round(avgRecordedLux)} lx) is below target (${minLux}–${maxLux} lx), which can slow new leaves or cause leggy stems.`);
+		actions.push("Move closer to your Barcelona north glass edge and rotate the pot 90°.");
+	}
+	if (calc.status === "overdue") {
+		issues.push(`Watering is ${Math.abs(calc.daysUntilWater)}d overdue (check for drooping or dull foliage).`);
+		actions.push("Check top 3 cm of soil and water thoroughly if dry.");
+	}
+	if (calc.effectiveHumidityPct < 45) {
+		issues.push(`Room humidity (${Math.round(calc.effectiveHumidityPct)}% RH) is dry, which can brown leaf tips.`);
+		actions.push("Keep away from heating vents or group plants together.");
+	}
+	const healthStatus = avgRecordedLux < minLux * .7 || calc.status === "overdue" && calc.daysUntilWater <= -3 ? "issue" : issues.length > 0 ? "watch" : "thriving";
+	const growthSummary = hasPreviousPhoto ? `Saved timeline comparison photo (${Math.round(avgRecordedLux)} lx avg, ${calc.effectiveTempC.toFixed(1)}°C). AI vision offline — run online check later.` : `Saved baseline growth photo (${Math.round(avgRecordedLux)} lx avg, ${calc.effectiveTempC.toFixed(1)}°C). AI vision offline — run online check later.`;
+	const issueDetected = issues.join(" ").slice(0, 300);
+	const recommendedAction = (actions.join(" ") || "Open this plant in the hosted web preview and tap Analyze Photo Online for full leaf-level visual inspection.").slice(0, 400);
+	return {
+		healthStatus,
+		growthSummary: growthSummary.slice(0, 300),
+		issueDetected,
+		recommendedAction
+	};
+}
 // src/components/WidgetHomeView.tsx
-var WidgetHomeView = ({ plants, monthlyTemps, onOpenFullSchedule, onSelectPlant, onWaterPlant, onAddPlant, onOpenClimate, onOpenLux }) => {
+var WidgetHomeView = ({ plants, monthlyTemps, onOpenFullSchedule, onSelectPlant, onWaterPlant, onSnoozeDamp, onAddPlant, onOpenClimate, onOpenLux }) => {
 	const [widgetSize, setWidgetSize] = (0, import_react.useState)("detailed");
 	const [wateringId, setWateringId] = (0, import_react.useState)(null);
+	const [snoozingId, setSnoozingId] = (0, import_react.useState)(null);
 	const [notifStatus, setNotifStatus] = (0, import_react.useState)(() => typeof Notification !== "undefined" ? Notification.permission : "unsupported");
 	const now = /* @__PURE__ */ new Date();
 	const currentMonthKey = getCurrentMonthKey(now);
@@ -24716,6 +24842,7 @@ var WidgetHomeView = ({ plants, monthlyTemps, onOpenFullSchedule, onSelectPlant,
 	const recordedTemp = monthlyTemps.find((m) => m.monthKey === currentMonthKey);
 	const displayTempC = recordedTemp?.avgTempC ?? monthBaseline.avgIndoorTempC;
 	const displayHumidityPct = recordedTemp?.humidityPct ?? monthBaseline.avgHumidityPct;
+	const displayDaylightHours = recordedTemp?.daylightHours ?? monthBaseline.daylightHours;
 	const calculated = plants.map((plant) => ({
 		plant,
 		calc: calculateWateringSchedule(plant, monthlyTemps, now)
@@ -24738,6 +24865,15 @@ var WidgetHomeView = ({ plants, monthlyTemps, onOpenFullSchedule, onSelectPlant,
 			await onWaterPlant(plant);
 		} finally {
 			setWateringId(null);
+		}
+	};
+	const handleQuickSnooze = async (e, plant) => {
+		e.stopPropagation();
+		setSnoozingId(plant.id);
+		try {
+			await onSnoozeDamp(plant);
+		} finally {
+			setSnoozingId(null);
 		}
 	};
 	const handleRequestNotifications = async () => {
@@ -24873,7 +25009,7 @@ var WidgetHomeView = ({ plants, monthlyTemps, onOpenFullSchedule, onSelectPlant,
 						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "divide-y divide-[#EEF0EA]",
 							children: [(widgetSize === "compact" ? dueTodayOrOverdue.slice(0, 3) : dueTodayOrOverdue).map(({ plant, calc }) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#FAFBF8] transition-colors",
+								className: "px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#FAFBF8] transition-colors",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "flex items-center gap-3.5 min-w-0",
 									children: [plant.photoDataUrl ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
@@ -24914,15 +25050,21 @@ var WidgetHomeView = ({ plants, monthlyTemps, onOpenFullSchedule, onSelectPlant,
 											] })]
 										})]
 									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "flex items-center gap-2 shrink-0",
-									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex items-center gap-2 shrink-0 sm:justify-end",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 										type: "button",
-										disabled: wateringId === plant.id,
+										disabled: wateringId === plant.id || snoozingId === plant.id,
+										onClick: (e) => void handleQuickSnooze(e, plant),
+										className: "flex-1 sm:flex-none min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#4B5850] hover:text-[#18221D] hover:bg-[#F0F1EC] text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Clock, { className: "w-3.5 h-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: snoozingId === plant.id ? "Snoozing..." : "Damp +2d" })]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										disabled: wateringId === plant.id || snoozingId === plant.id,
 										onClick: (e) => void handleQuickWater(e, plant),
-										className: "min-h-[44px] px-3.5 py-2 rounded-xl bg-[#EEF4F0] text-[#1F513B] hover:bg-[#1F513B] hover:text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap",
+										className: "flex-1 sm:flex-none min-h-[44px] px-3.5 py-2 rounded-xl bg-[#EEF4F0] text-[#1F513B] hover:bg-[#1F513B] hover:text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Droplets, { className: "w-3.5 h-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: wateringId === plant.id ? "Saving..." : "Watered" })]
-									})
+									})]
 								})]
 							}, plant.id)), widgetSize === "compact" && dueTodayOrOverdue.length > 3 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "px-5 py-3 text-xs font-medium text-[#1F513B] bg-[#FAFBF8]",
@@ -24995,8 +25137,8 @@ var WidgetHomeView = ({ plants, monthlyTemps, onOpenFullSchedule, onSelectPlant,
 									children: [
 										"41.39°N · ",
 										monthBaseline.monthName,
-										" photoperiod ",
-										monthBaseline.daylightHours,
+										" daylight ",
+										displayDaylightHours.toFixed(1),
 										"h"
 									]
 								})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
@@ -25096,9 +25238,9 @@ var WidgetHomeView = ({ plants, monthlyTemps, onOpenFullSchedule, onSelectPlant,
 										className: "text-sm text-[#18221D] truncate",
 										children: plant.entryType === "group" ? `${plant.quantity}× ${plant.name}` : plant.name
 									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 									className: "text-xs font-mono tabular-nums text-[#4B5850] shrink-0",
-									children: formatDueSummary(calc.daysUntilWater)
+									children: [calc.isSnoozed ? "Snoozed · " : "", formatDueSummary(calc.daysUntilWater)]
 								})]
 							}, plant.id)), calculated.filter((c) => c.calc.daysUntilWater > 0).length === 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 								className: "text-xs text-[#4B5850] py-1",
@@ -25112,10 +25254,11 @@ var WidgetHomeView = ({ plants, monthlyTemps, onOpenFullSchedule, onSelectPlant,
 	});
 };
 // src/components/CollectionPage.tsx
-var CollectionPage = ({ plants, monthlyTemps, initialFilter = "all", onBackToWidget, onSelectPlant, onWaterPlant, onAddPlant, onOpenLuxForPlant }) => {
+var CollectionPage = ({ plants, monthlyTemps, initialFilter = "all", onBackToWidget, onSelectPlant, onWaterPlant, onSnoozeDamp, onAddPlant, onOpenLuxForPlant }) => {
 	const [filter, setFilter] = (0, import_react.useState)(initialFilter);
 	const [searchQuery, setSearchQuery] = (0, import_react.useState)("");
 	const [wateringId, setWateringId] = (0, import_react.useState)(null);
+	const [snoozingId, setSnoozingId] = (0, import_react.useState)(null);
 	const now = /* @__PURE__ */ new Date();
 	const monthBaseline = BARCELONA_MONTHLY_BASELINE[now.getMonth() + 1];
 	const activeTemp = monthlyTemps.find((m) => m.monthKey === getCurrentMonthKey(now))?.avgTempC ?? monthBaseline.avgIndoorTempC;
@@ -25150,6 +25293,15 @@ var CollectionPage = ({ plants, monthlyTemps, initialFilter = "all", onBackToWid
 			await onWaterPlant(plant);
 		} finally {
 			setWateringId(null);
+		}
+	};
+	const handleSnoozeDamp = async (e, plant) => {
+		e.stopPropagation();
+		setSnoozingId(plant.id);
+		try {
+			await onSnoozeDamp(plant);
+		} finally {
+			setSnoozingId(null);
 		}
 	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -25331,6 +25483,13 @@ var CollectionPage = ({ plants, monthlyTemps, initialFilter = "all", onBackToWid
 													"d"
 												]
 											}),
+											calc.isSnoozed && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												"aria-hidden": "true",
+												children: "·"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-[#1F513B] font-medium",
+												children: "Snoozed +2d"
+											})] }),
 											getPlantAverageLuxStats(plant, void 0, now).dueForMonthlyLux && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 												"aria-hidden": "true",
 												children: "·"
@@ -25346,7 +25505,7 @@ var CollectionPage = ({ plants, monthlyTemps, initialFilter = "all", onBackToWid
 									})
 								]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "pt-3 border-t border-[#EEF0EA] flex items-center justify-between gap-2",
+								className: "pt-3 border-t border-[#EEF0EA] flex flex-wrap items-center justify-between gap-2",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 									className: `text-sm font-semibold block ${statusColor}`,
 									children: formatDueSummary(calc.daysUntilWater)
@@ -25355,22 +25514,33 @@ var CollectionPage = ({ plants, monthlyTemps, initialFilter = "all", onBackToWid
 									children: ["Next: ", nextDateStr]
 								})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "flex items-center gap-2",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										type: "button",
-										"aria-label": `Measure lux for ${plant.name}`,
-										onClick: (e) => {
-											e.stopPropagation();
-											onOpenLuxForPlant(plant);
-										},
-										className: "min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border border-[#D4D8CE] text-[#4B5850] hover:text-[#18221D] hover:bg-[#F0F1EC]",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sun, { className: "w-4 h-4" })
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-										type: "button",
-										disabled: wateringId === plant.id,
-										onClick: (e) => void handleWater(e, plant),
-										className: "min-h-[44px] px-3.5 py-2 rounded-xl bg-[#EEF4F0] text-[#1F513B] hover:bg-[#1F513B] hover:text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Droplets, { className: "w-3.5 h-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: wateringId === plant.id ? "Saving..." : "Water" })]
-									})]
+									children: [
+										calc.daysUntilWater <= 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											disabled: wateringId === plant.id || snoozingId === plant.id,
+											onClick: (e) => void handleSnoozeDamp(e, plant),
+											title: "Still damp — postpone +2 days and calibrate interval",
+											className: "min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#4B5850] hover:text-[#18221D] hover:bg-[#F0F1EC] text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Clock, { className: "w-3.5 h-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: snoozingId === plant.id ? "Saving..." : "Damp +2d" })]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											type: "button",
+											"aria-label": `Measure lux for ${plant.name}`,
+											onClick: (e) => {
+												e.stopPropagation();
+												onOpenLuxForPlant(plant);
+											},
+											className: "min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border border-[#D4D8CE] text-[#4B5850] hover:text-[#18221D] hover:bg-[#F0F1EC]",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sun, { className: "w-4 h-4" })
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											type: "button",
+											disabled: wateringId === plant.id || snoozingId === plant.id,
+											onClick: (e) => void handleWater(e, plant),
+											className: "min-h-[44px] px-3.5 py-2 rounded-xl bg-[#EEF4F0] text-[#1F513B] hover:bg-[#1F513B] hover:text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Droplets, { className: "w-3.5 h-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: wateringId === plant.id ? "Saving..." : "Water" })]
+										})
+									]
 								})]
 							})]
 						})]
@@ -25390,6 +25560,7 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 	const [minTempC, setMinTempC] = (0, import_react.useState)(existingRecord?.minTempC ?? Number((baseline.avgIndoorTempC - 2).toFixed(1)));
 	const [maxTempC, setMaxTempC] = (0, import_react.useState)(existingRecord?.maxTempC ?? Number((baseline.avgIndoorTempC + 2).toFixed(1)));
 	const [humidityPct, setHumidityPct] = (0, import_react.useState)(existingRecord?.humidityPct ?? baseline.avgHumidityPct);
+	const [daylightHours, setDaylightHours] = (0, import_react.useState)(existingRecord?.daylightHours ?? baseline.daylightHours);
 	const [heatingOrAc, setHeatingOrAc] = (0, import_react.useState)(existingRecord?.heatingOrAc ?? "natural_vent");
 	const [note, setNote] = (0, import_react.useState)(existingRecord?.note ?? "");
 	const [saving, setSaving] = (0, import_react.useState)(false);
@@ -25401,6 +25572,7 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 		setMinTempC(rec?.minTempC ?? Number((base.avgIndoorTempC - 2).toFixed(1)));
 		setMaxTempC(rec?.maxTempC ?? Number((base.avgIndoorTempC + 2).toFixed(1)));
 		setHumidityPct(rec?.humidityPct ?? base.avgHumidityPct);
+		setDaylightHours(rec?.daylightHours ?? base.daylightHours);
 		setHeatingOrAc(rec?.heatingOrAc ?? "natural_vent");
 		setNote(rec?.note ?? "");
 		setSavedMsg(null);
@@ -25422,9 +25594,10 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 				maxTempC,
 				humidityPct,
 				heatingOrAc,
+				daylightHours,
 				note
 			}, Boolean(existingRecord));
-			setSavedMsg(`Saved ${formatMonthLabel(selectedMonthKey)} (${avgTempC.toFixed(1)}°C)`);
+			setSavedMsg(`Saved ${formatMonthLabel(selectedMonthKey)} (${avgTempC.toFixed(1)}°C · ${daylightHours.toFixed(1)}h)`);
 		} finally {
 			setSaving(false);
 		}
@@ -25433,10 +25606,10 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 		className: "space-y-6",
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
 			className: "text-2xl sm:text-3xl font-semibold tracking-tight text-[#18221D]",
-			children: "Monthly Room Temperature & Air Humidity"
+			children: "Monthly Room Temp, Humidity & Daylight"
 		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "text-sm text-[#4B5850] mt-1",
-			children: "Record your apartment's monthly room temperature (°C) and air humidity (% RH) so watering schedules adapt to Barcelona winter heating and summer heat."
+			children: "Record and edit your monthly indoor temperature (°C), air humidity (% RH), and average daylight hours so watering intervals match your exact window conditions."
 		})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start",
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
@@ -25514,7 +25687,7 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 							]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "grid grid-cols-1 sm:grid-cols-2 gap-3",
+							className: "grid grid-cols-2 gap-3",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
 								htmlFor: "humidity-pct",
 								className: "block text-xs font-medium text-[#4B5850] mb-1.5",
@@ -25528,34 +25701,48 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 								onChange: (e) => setHumidityPct(Number(e.target.value) || 60),
 								className: "w-full min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] text-sm font-mono tabular-nums"
 							})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-								htmlFor: "hvac-mode",
+								htmlFor: "daylight-hours",
 								className: "block text-xs font-medium text-[#4B5850] mb-1.5",
-								children: "Heating / Ventilation"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-								id: "hvac-mode",
-								value: heatingOrAc,
-								onChange: (e) => setHeatingOrAc(e.target.value),
-								className: "w-full min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-										value: "natural_vent",
-										children: "Window / Natural Vent"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-										value: "heating",
-										children: "Radiator / Heating On"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-										value: "ac",
-										children: "Air Conditioning"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-										value: "none",
-										children: "Unconditioned"
-									})
-								]
+								children: "Avg Daylight (hrs/day)"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								id: "daylight-hours",
+								type: "number",
+								step: "0.5",
+								min: .5,
+								max: 18,
+								value: daylightHours,
+								onChange: (e) => setDaylightHours(Math.max(.5, Math.min(18, Number(e.target.value) || baseline.daylightHours))),
+								className: "w-full min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] text-sm font-mono tabular-nums"
 							})] })]
 						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+							htmlFor: "hvac-mode",
+							className: "block text-xs font-medium text-[#4B5850] mb-1.5",
+							children: "Heating / Ventilation"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							id: "hvac-mode",
+							value: heatingOrAc,
+							onChange: (e) => setHeatingOrAc(e.target.value),
+							className: "w-full min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: "natural_vent",
+									children: "Window / Natural Vent"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: "heating",
+									children: "Radiator / Heating On"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: "ac",
+									children: "Air Conditioning"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: "none",
+									children: "Unconditioned"
+								})
+							]
+						})] }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
 							htmlFor: "climate-note",
 							className: "block text-xs font-medium text-[#4B5850] mb-1.5",
@@ -25577,11 +25764,13 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 								className: "text-xs text-[#4B5850]",
 								children: [
-									"Barcelona baseline: ",
+									"BCN baseline: ",
 									baseline.avgIndoorTempC,
 									"°C · ",
 									baseline.avgHumidityPct,
-									"% RH"
+									"% · ",
+									baseline.daylightHours,
+									"h"
 								]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 								type: "submit",
@@ -25598,10 +25787,10 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 					className: "flex flex-wrap items-center justify-between gap-2",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
 						className: "text-base font-semibold text-[#18221D]",
-						children: [currentYear, " Monthly Log & Photoperiod"]
+						children: [currentYear, " Monthly Log & Daylight"]
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 						className: "text-xs text-[#4B5850]",
-						children: "Tap any month to edit its room temperature"
+						children: "Tap any month to edit temp, humidity & daylight hours"
 					})]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 					className: "grid grid-cols-2 sm:grid-cols-3 gap-2.5",
@@ -25610,6 +25799,7 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 						const rec = monthlyTemps.find((t) => t.monthKey === mk);
 						const isSelected = mk === selectedMonthKey;
 						const tempDisplay = rec ? rec.avgTempC : base.avgIndoorTempC;
+						const daylightDisplay = rec?.daylightHours ?? base.daylightHours;
 						return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							type: "button",
 							onClick: () => setSelectedMonthKey(mk),
@@ -25622,7 +25812,7 @@ var ClimateView = ({ monthlyTemps, onSaveMonthlyTemp }) => {
 										children: base.shortName
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 										className: "text-[11px] text-[#4B5850] font-mono tabular-nums",
-										children: [base.daylightHours, "h"]
+										children: [daylightDisplay.toFixed(1), "h"]
 									})]
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
@@ -25685,6 +25875,7 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 	const [luxValue, setLuxValue] = (0, import_react.useState)(350);
 	const [luxSource, setLuxSource] = (0, import_react.useState)("manual");
 	const [readingPeriod, setReadingPeriod] = (0, import_react.useState)("peak_noon");
+	const [saveMode, setSaveMode] = (0, import_react.useState)("append");
 	const [noteInput, setNoteInput] = (0, import_react.useState)("");
 	const [sensorActive, setSensorActive] = (0, import_react.useState)(false);
 	const [sensorName, setSensorName] = (0, import_react.useState)(null);
@@ -25923,21 +26114,23 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 	};
 	const selectedPlant = plants.find((p) => p.id === selectedPlantId) ?? null;
 	const selectedStats = selectedPlant ? getPlantAverageLuxStats(selectedPlant, void 0, now) : null;
-	const previewNewAvg = selectedStats ? Math.round((selectedStats.avgRecordedLux * selectedStats.readingCount + luxValue) / (selectedStats.readingCount + 1)) : luxValue;
+	const previewNewAvg = saveMode === "set_average" ? luxValue : selectedStats ? Math.round((selectedStats.avgRecordedLux * selectedStats.readingCount + luxValue) / (selectedStats.readingCount + 1)) : luxValue;
 	const handleSave = async (e) => {
 		e.preventDefault();
 		if (!selectedPlantId) return;
 		setSaving(true);
 		setSavedFeedback(null);
 		try {
-			await onSaveLux(selectedPlantId, luxValue, luxSource, readingPeriod, noteInput.trim() || void 0);
+			await onSaveLux(selectedPlantId, luxValue, luxSource, readingPeriod, noteInput.trim() || void 0, saveMode);
 			const targetName = selectedPlant?.name ?? "Plant";
-			setSavedFeedback(`Saved ${luxValue} lux to ${targetName} · New avg ${previewNewAvg} lx`);
+			setSavedFeedback(saveMode === "set_average" ? `Updated average daylight for ${targetName} to ${luxValue} lx` : `Saved ${luxValue} lux to ${targetName} · New avg ${previewNewAvg} lx`);
 			setNoteInput("");
 			stopCameraEstimator();
 			await stopPhoneSensor();
-			const remainingDue = duePlants.filter((p) => p.id !== selectedPlantId);
-			if (remainingDue.length > 0) setSelectedPlantId(remainingDue[0].id);
+			if (saveMode === "append") {
+				const remainingDue = duePlants.filter((p) => p.id !== selectedPlantId);
+				if (remainingDue.length > 0) setSelectedPlantId(remainingDue[0].id);
+			}
 		} finally {
 			setSaving(false);
 		}
@@ -26232,6 +26425,26 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 									placeholder: "e.g. Clear sky at 12:50 CET, blinds fully open",
 									className: "w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm text-[#18221D]"
 								})] }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "space-y-1.5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "block text-xs font-medium text-[#4B5850]",
+										children: "How to Apply This Reading"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "grid grid-cols-1 sm:grid-cols-2 gap-2 p-1 rounded-xl bg-[#EAECE5]",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											type: "button",
+											onClick: () => setSaveMode("append"),
+											className: `min-h-[40px] px-3 rounded-lg text-xs font-medium transition-colors ${saveMode === "append" ? "bg-white text-[#18221D] shadow-xs" : "text-[#4B5850] hover:text-[#18221D]"}`,
+											children: "Add to Rolling Average"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											type: "button",
+											onClick: () => setSaveMode("set_average"),
+											className: `min-h-[40px] px-3 rounded-lg text-xs font-medium transition-colors ${saveMode === "set_average" ? "bg-white text-[#18221D] shadow-xs" : "text-[#4B5850] hover:text-[#18221D]"}`,
+											children: "Set / Replace Avg Daylight"
+										})]
+									})]
+								}),
 								selectedPlant && selectedStats && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "rounded-xl bg-[#FAFBF8] border border-[#EEF0EA] px-4 py-3 grid grid-cols-3 gap-3 text-xs",
 									children: [
@@ -26262,9 +26475,9 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 												className: "font-mono tabular-nums font-semibold text-[#1F513B] text-sm",
 												children: [previewNewAvg, " lx"]
 											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 												className: "text-[11px] text-[#4B5850] block",
-												children: [selectedStats.readingCount + 1, " readings"]
+												children: saveMode === "set_average" ? "Direct replacement" : `${selectedStats.readingCount + 1} readings`
 											})
 										] }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
@@ -26294,12 +26507,12 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Check, { className: "w-4 h-4" }), savedFeedback]
 									}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 										className: "text-xs text-[#4B5850]",
-										children: "Updates this plant's average daylight lux & watering schedule."
+										children: saveMode === "set_average" ? "Directly overrides this plant’s average daylight lux & updates watering." : "Updates this plant’s rolling average daylight lux & watering schedule."
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 										type: "submit",
 										disabled: saving || plants.length === 0,
 										className: "min-h-[44px] px-5 py-2 rounded-xl bg-[#1F513B] text-white text-sm font-medium hover:bg-[#173E2D] disabled:opacity-50 whitespace-nowrap",
-										children: saving ? "Saving..." : "Save Lux Reading"
+										children: saving ? "Saving..." : saveMode === "set_average" ? "Set Average Daylight" : "Save Lux Reading"
 									})]
 								})
 							]
@@ -26319,10 +26532,9 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 							className: "divide-y divide-[#EEF0EA]",
 							children: plants.map((p) => {
 								const stats = getPlantAverageLuxStats(p, void 0, now);
-								return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
+								return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									onClick: () => setSelectedPlantId(p.id),
-									className: `w-full py-2.5 px-2 rounded-xl flex items-center justify-between gap-3 text-left transition-colors ${p.id === selectedPlantId ? "bg-[#EEF4F0]/60" : "hover:bg-[#FAFBF8]"}`,
+									className: `py-2.5 px-2 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-colors ${p.id === selectedPlantId ? "bg-[#EEF4F0]/60" : "hover:bg-[#FAFBF8]"}`,
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										className: "min-w-0",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
@@ -26346,17 +26558,31 @@ var LuxMeterView = ({ plants, initialPlantId, onSaveLux }) => {
 											]
 										})]
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "text-right shrink-0",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: "text-sm font-semibold font-mono tabular-nums text-[#18221D] block",
-											children: [stats.avgRecordedLux, " lx avg"]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: "text-[11px] font-mono tabular-nums text-[#4B5850] block",
-											children: [
-												"~",
-												stats.estimatedFullDayLux,
-												" lx day"
-											]
+										className: "flex items-center gap-2.5 shrink-0",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "text-right",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+												className: "text-sm font-semibold font-mono tabular-nums text-[#18221D] block",
+												children: [stats.avgRecordedLux, " lx avg"]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+												className: "text-[11px] font-mono tabular-nums text-[#4B5850] block",
+												children: [
+													"~",
+													stats.estimatedFullDayLux,
+													" lx day"
+												]
+											})]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											type: "button",
+											onClick: (e) => {
+												e.stopPropagation();
+												setSelectedPlantId(p.id);
+												setLuxValue(stats.avgRecordedLux);
+												setLuxSource("manual");
+												setSaveMode("set_average");
+											},
+											className: "min-h-[36px] px-2.5 py-1 rounded-lg border border-[#D4D8CE] bg-white text-xs font-medium text-[#1F513B] hover:bg-[#EEF4F0] whitespace-nowrap",
+											children: "Edit"
 										})]
 									})]
 								}, p.id);
@@ -57194,22 +57420,39 @@ function sanitizeHttpUrl(url) {
 		return "";
 	}
 }
+var ApiUnreachableError = class extends Error {
+	constructor(message) {
+		super(message);
+		this.name = "ApiUnreachableError";
+	}
+};
+async function describeNonJsonResponse(res, featureLabel) {
+	const contentType = res.headers.get("content-type") || "unknown";
+	const bodySnippet = await res.text().catch(() => "");
+	if (res.url.includes("accounts.google.com") || bodySnippet.includes("accounts.google.com") || bodySnippet.includes("ServiceLogin")) return `${featureLabel} was blocked by an auth proxy login page (AI Studio preview URLs require a browser session and cannot be called directly by an APK). Use the web preview or host NordFlora's server publicly.`;
+	return `${featureLabel} is unreachable from this build (HTTP ${res.status}, ${contentType}).`;
+}
 async function identifyPlantFromPhoto(imageDataUrl) {
 	const currentUser = auth.currentUser;
 	if (!currentUser) throw new Error("Please sign in before looking up a plant photo.");
 	const idToken = await currentUser.getIdToken();
 	const configuredApiBase = "".trim().replace(/\/+$/, "");
 	const endpoint = configuredApiBase ? `${configuredApiBase}/api/identify-plant` : "/api/identify-plant";
-	if (Capacitor.isNativePlatform() && !configuredApiBase) throw new Error("Photo species lookup in the standalone APK needs VITE_API_BASE_URL set to your hosted NordFlora server URL at build time. You can still pick a species preset or enter care details manually.");
-	const res = await fetch(endpoint, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${idToken}`
-		},
-		body: JSON.stringify({ imageDataUrl })
-	});
-	if (!(res.headers.get("content-type") || "").includes("application/json")) throw new Error("Photo species lookup API is unreachable from this build. Pick a species preset or enter care details manually.");
+	if (Capacitor.isNativePlatform() && !configuredApiBase) throw new ApiUnreachableError("Photo species lookup in the standalone APK needs VITE_API_BASE_URL set to a public NordFlora server URL at build time. You can still pick a species preset or enter care details manually.");
+	let res;
+	try {
+		res = await fetch(endpoint, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${idToken}`
+			},
+			body: JSON.stringify({ imageDataUrl })
+		});
+	} catch {
+		throw new ApiUnreachableError("Could not reach the species lookup server. Check your internet connection or server URL.");
+	}
+	if (!(res.headers.get("content-type") || "").includes("application/json")) throw new ApiUnreachableError(await describeNonJsonResponse(res, "Photo species lookup API"));
 	const payload = await res.json().catch(() => ({}));
 	if (!res.ok) throw new Error(payload.error || "Could not look up that plant photo online.");
 	return {
@@ -57223,6 +57466,54 @@ async function identifyPlantFromPhoto(imageDataUrl) {
 		confidence: payload.confidence || "medium",
 		grounded: payload.grounded,
 		sources: Array.isArray(payload.sources) ? payload.sources : []
+	};
+}
+async function analyzePlantGrowth(params) {
+	const currentUser = auth.currentUser;
+	if (!currentUser) throw new Error("Please sign in before analyzing plant growth.");
+	const idToken = await currentUser.getIdToken();
+	const configuredApiBase = "".trim().replace(/\/+$/, "");
+	const endpoint = configuredApiBase ? `${configuredApiBase}/api/analyze-growth` : "/api/analyze-growth";
+	if (Capacitor.isNativePlatform() && !configuredApiBase) throw new ApiUnreachableError("Standalone APK has no public VITE_API_BASE_URL configured for AI vision.");
+	let res;
+	try {
+		res = await fetch(endpoint, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${idToken}`
+			},
+			body: JSON.stringify({
+				currentPhotoDataUrl: params.currentPhotoDataUrl,
+				previousPhotoDataUrl: params.previousPhotoDataUrl || void 0,
+				previousRecordedAt: params.previousRecordedAt || void 0,
+				plantContext: {
+					name: params.plant.name,
+					speciesName: params.plant.speciesName,
+					botanicalName: params.plant.botanicalName,
+					avgLux: params.plant.avgLux ?? params.plant.latestLux,
+					idealLuxMin: params.plant.idealLuxMin,
+					idealLuxMax: params.plant.idealLuxMax,
+					baseWaterDays: params.plant.baseWaterDays,
+					potMaterial: params.plant.potMaterial,
+					potSize: params.plant.potSize,
+					avgTempC: params.effectiveTempC,
+					humidityPct: params.effectiveHumidityPct,
+					daylightHours: params.daylightHours
+				}
+			})
+		});
+	} catch {
+		throw new ApiUnreachableError("Could not reach the growth diagnosis server. Check your internet connection or server URL.");
+	}
+	if (!(res.headers.get("content-type") || "").includes("application/json")) throw new ApiUnreachableError(await describeNonJsonResponse(res, "Growth diagnosis API"));
+	const payload = await res.json().catch(() => ({}));
+	if (!res.ok) throw new Error(payload.error || "Could not analyze plant growth from that photo.");
+	return {
+		healthStatus: payload.healthStatus === "thriving" || payload.healthStatus === "watch" || payload.healthStatus === "issue" ? payload.healthStatus : "watch",
+		growthSummary: payload.growthSummary || "Growth snapshot saved.",
+		issueDetected: payload.issueDetected || "",
+		recommendedAction: payload.recommendedAction || "Continue monitoring topsoil moisture and north-window light levels."
 	};
 }
 function subscribePlants(userId, onData) {
@@ -57244,6 +57535,14 @@ function subscribeMonthlyTemps(userId, onData) {
 function subscribePlantLogs(userId, plantId, onData) {
 	const path = `users/${userId}/plants/${plantId}/logs`;
 	return onSnapshot(query(collection(db, "users", userId, "plants", plantId, "logs"), where("ownerId", "==", userId), orderBy("recordedAt", "desc")), (snapshot) => {
+		onData(snapshot.docs.map((d) => d.data()));
+	}, (error) => {
+		handleFirestoreError(error, OperationType.LIST, path);
+	});
+}
+function subscribeGrowthPhotos(userId, plantId, onData) {
+	const path = `users/${userId}/plants/${plantId}/growthPhotos`;
+	return onSnapshot(query(collection(db, "users", userId, "plants", plantId, "growthPhotos"), where("ownerId", "==", userId), orderBy("recordedAt", "desc")), (snapshot) => {
 		onData(snapshot.docs.map((d) => d.data()));
 	}, (error) => {
 		handleFirestoreError(error, OperationType.LIST, path);
@@ -57275,7 +57574,7 @@ async function createPlant(userId, input) {
 		potSize: input.potSize,
 		baseWaterDays: Number(clamp(input.baseWaterDays, 1, 90).toFixed(1)),
 		latestLux: safeLatestLux,
-		avgLux: safeLatestLux,
+		avgLux: typeof input.avgLux === "number" ? Math.round(clamp(input.avgLux, 0, 15e4)) : safeLatestLux,
 		luxReadingCount: 1,
 		lastLuxMonth,
 		luxSource: input.luxSource,
@@ -57335,6 +57634,7 @@ async function markPlantWatered(userId, plant, note = "Watered") {
 		const batch = writeBatch(db);
 		batch.update(doc(db, "users", userId, "plants", plant.id), {
 			lastWateredAt: nowIso,
+			snoozedUntilAt: "",
 			updatedAt: serverTimestamp()
 		});
 		batch.set(doc(db, "users", userId, "plants", plant.id, "logs", logId), {
@@ -57354,7 +57654,39 @@ async function markPlantWatered(userId, plant, note = "Watered") {
 		handleFirestoreError(error, OperationType.UPDATE, plantPath);
 	}
 }
-async function recordPlantLux(userId, plant, luxValue, luxSource, readingPeriod = "peak_noon", note = "") {
+async function snoozePlantDamp(userId, plant, monthlyTemps) {
+	const now = /* @__PURE__ */ new Date();
+	const nowIso = now.toISOString();
+	const logId = makeSafeId("snooze");
+	const plantPath = `users/${userId}/plants/${plant.id}`;
+	const cal = computeDampSnoozeCalibration(plant, monthlyTemps, now, 2);
+	const note = cal.stepDays > 0 ? `Snoozed +2d (soil still damp) · base ${plant.baseWaterDays}d → ${cal.nextBaseWaterDays}d` : "Snoozed +2d (soil still damp)";
+	try {
+		const batch = writeBatch(db);
+		batch.update(doc(db, "users", userId, "plants", plant.id), {
+			snoozedUntilAt: cal.snoozedUntilAt,
+			baseWaterDays: cal.nextBaseWaterDays,
+			dampSnoozeCount: cal.nextDampSnoozeCount,
+			updatedAt: serverTimestamp()
+		});
+		batch.set(doc(db, "users", userId, "plants", plant.id, "logs", logId), {
+			id: logId,
+			ownerId: userId,
+			plantId: plant.id,
+			logType: "snooze",
+			luxValue: Math.round(clamp(plant.latestLux, 0, 15e4)),
+			luxSource: "none",
+			readingPeriod: "none",
+			note: note.slice(0, 160),
+			recordedAt: nowIso,
+			createdAt: serverTimestamp()
+		});
+		await batch.commit();
+	} catch (error) {
+		handleFirestoreError(error, OperationType.UPDATE, plantPath);
+	}
+}
+async function recordPlantLux(userId, plant, luxValue, luxSource, readingPeriod = "peak_noon", note = "", mode = "append") {
 	const now = /* @__PURE__ */ new Date();
 	const nowIso = now.toISOString();
 	const safeLux = Math.round(clamp(luxValue, 0, 15e4));
@@ -57362,8 +57694,8 @@ async function recordPlantLux(userId, plant, luxValue, luxSource, readingPeriod 
 	const plantPath = `users/${userId}/plants/${plant.id}`;
 	const prevCount = Math.max(0, Math.round(plant.luxReadingCount ?? 1));
 	const prevAvg = Math.max(0, plant.avgLux ?? plant.latestLux);
-	const newCount = Math.min(1e4, prevCount + 1);
-	const newAvg = newCount <= 1 ? safeLux : Math.round(clamp((prevAvg * prevCount + safeLux) / newCount, 0, 15e4));
+	const newCount = mode === "set_average" ? 1 : Math.min(1e4, prevCount + 1);
+	const newAvg = mode === "set_average" || newCount <= 1 ? safeLux : Math.round(clamp((prevAvg * prevCount + safeLux) / newCount, 0, 15e4));
 	const lastLuxMonth = getCurrentMonthKey(now);
 	try {
 		const batch = writeBatch(db);
@@ -57384,7 +57716,7 @@ async function recordPlantLux(userId, plant, luxValue, luxSource, readingPeriod 
 			luxValue: safeLux,
 			luxSource,
 			readingPeriod,
-			note: (note || `${readingPeriod === "peak_noon" ? "Barcelona peak daylight" : "General time"} · ${safeLux} lux (${luxSource})`).trim().slice(0, 160),
+			note: (note || (mode === "set_average" ? `Set average daylight · ${safeLux} lux (${luxSource})` : `${readingPeriod === "peak_noon" ? "Barcelona peak daylight" : "General time"} · ${safeLux} lux (${luxSource})`)).trim().slice(0, 160),
 			recordedAt: nowIso,
 			createdAt: serverTimestamp()
 		});
@@ -57417,6 +57749,69 @@ async function updatePlantPhotoAndCare(userId, plantId, photoDataUrl, lookup) {
 		handleFirestoreError(error, OperationType.UPDATE, path);
 	}
 }
+async function addGrowthPhoto(userId, plant, photoDataUrl, analysis, updateCoverPhoto = true, recordedAtOverride) {
+	const nowIso = recordedAtOverride ? recordedAtOverride.slice(0, 40) : (/* @__PURE__ */ new Date()).toISOString();
+	const photoId = makeSafeId("growth");
+	const path = `users/${userId}/plants/${plant.id}/growthPhotos/${photoId}`;
+	const avgLuxSnapshot = Math.round(clamp(plant.avgLux ?? plant.latestLux, 0, 15e4));
+	try {
+		const batch = writeBatch(db);
+		batch.set(doc(db, "users", userId, "plants", plant.id, "growthPhotos", photoId), {
+			id: photoId,
+			ownerId: userId,
+			plantId: plant.id,
+			photoDataUrl: photoDataUrl.slice(0, 175e3),
+			healthStatus: analysis.healthStatus,
+			growthSummary: (analysis.growthSummary.trim() || "Growth photo recorded.").slice(0, 300),
+			issueDetected: analysis.issueDetected.trim().slice(0, 300),
+			recommendedAction: analysis.recommendedAction.trim().slice(0, 400),
+			avgLuxSnapshot,
+			recordedAt: nowIso,
+			createdAt: serverTimestamp()
+		});
+		if (updateCoverPhoto) batch.update(doc(db, "users", userId, "plants", plant.id), {
+			photoDataUrl: photoDataUrl.slice(0, 175e3),
+			updatedAt: serverTimestamp()
+		});
+		await batch.commit();
+		return photoId;
+	} catch (error) {
+		handleFirestoreError(error, OperationType.CREATE, path);
+	}
+}
+async function replaceGrowthPhotoAnalysis(userId, plant, existingPhoto, analysis) {
+	const newPhotoId = makeSafeId("growth");
+	const path = `users/${userId}/plants/${plant.id}/growthPhotos/${newPhotoId}`;
+	try {
+		const batch = writeBatch(db);
+		batch.set(doc(db, "users", userId, "plants", plant.id, "growthPhotos", newPhotoId), {
+			id: newPhotoId,
+			ownerId: userId,
+			plantId: plant.id,
+			photoDataUrl: existingPhoto.photoDataUrl.slice(0, 175e3),
+			healthStatus: analysis.healthStatus,
+			growthSummary: (analysis.growthSummary.trim() || "Growth photo analyzed.").slice(0, 300),
+			issueDetected: analysis.issueDetected.trim().slice(0, 300),
+			recommendedAction: analysis.recommendedAction.trim().slice(0, 400),
+			avgLuxSnapshot: existingPhoto.avgLuxSnapshot,
+			recordedAt: existingPhoto.recordedAt.slice(0, 40),
+			createdAt: serverTimestamp()
+		});
+		batch.delete(doc(db, "users", userId, "plants", plant.id, "growthPhotos", existingPhoto.id));
+		await batch.commit();
+		return newPhotoId;
+	} catch (error) {
+		handleFirestoreError(error, OperationType.CREATE, path);
+	}
+}
+async function deleteGrowthPhoto(userId, plantId, photoId) {
+	const path = `users/${userId}/plants/${plantId}/growthPhotos/${photoId}`;
+	try {
+		await deleteDoc(doc(db, "users", userId, "plants", plantId, "growthPhotos", photoId));
+	} catch (error) {
+		handleFirestoreError(error, OperationType.DELETE, path);
+	}
+}
 async function deletePlant(userId, plantId) {
 	const path = `users/${userId}/plants/${plantId}`;
 	try {
@@ -57432,6 +57827,7 @@ async function saveMonthlyTemp(userId, input, existsAlready) {
 	const minTempC = Number(clamp(Math.min(input.minTempC, avgTempC), 0, 40).toFixed(1));
 	const maxTempC = Number(clamp(Math.max(input.maxTempC, avgTempC), 5, 45).toFixed(1));
 	const humidityPct = Math.round(clamp(input.humidityPct, 15, 95));
+	const daylightHours = Number(clamp(input.daylightHours, .5, 18).toFixed(1));
 	try {
 		if (existsAlready) await updateDoc(doc(db, "users", userId, "monthlyTemps", monthId), {
 			avgTempC,
@@ -57439,6 +57835,7 @@ async function saveMonthlyTemp(userId, input, existsAlready) {
 			maxTempC,
 			humidityPct,
 			heatingOrAc: input.heatingOrAc,
+			daylightHours,
 			note: input.note.trim().slice(0, 200),
 			updatedAt: serverTimestamp()
 		});
@@ -57451,6 +57848,7 @@ async function saveMonthlyTemp(userId, input, existsAlready) {
 			maxTempC,
 			humidityPct,
 			heatingOrAc: input.heatingOrAc,
+			daylightHours,
 			note: input.note.trim().slice(0, 200),
 			createdAt: serverTimestamp(),
 			updatedAt: serverTimestamp()
@@ -57682,6 +58080,8 @@ var PlantFormModal = ({ isOpen, initialPlant, onClose, onSave }) => {
 	const [potMaterial, setPotMaterial] = (0, import_react.useState)(initialPlant?.potMaterial ?? "terracotta");
 	const [potSize, setPotSize] = (0, import_react.useState)(initialPlant?.potSize ?? "medium");
 	const [latestLux, setLatestLux] = (0, import_react.useState)(initialPlant?.latestLux ?? 350);
+	const [avgLux, setAvgLux] = (0, import_react.useState)(initialPlant?.avgLux ?? initialPlant?.latestLux ?? 350);
+	const [avgLuxEdited, setAvgLuxEdited] = (0, import_react.useState)(false);
 	const [luxSource, setLuxSource] = (0, import_react.useState)(initialPlant?.luxSource ?? "manual");
 	const [lastWateredDate, setLastWateredDate] = (0, import_react.useState)(toLocalDateInput(initialPlant?.lastWateredAt ?? (/* @__PURE__ */ new Date()).toISOString()));
 	const [notes, setNotes] = (0, import_react.useState)(initialPlant?.notes ?? "");
@@ -57771,7 +58171,7 @@ var PlantFormModal = ({ isOpen, initialPlant, onClose, onSave }) => {
 				potSize,
 				baseWaterDays,
 				latestLux,
-				avgLux: (initialPlant?.luxReadingCount ?? 1) <= 1 ? latestLux : void 0,
+				avgLux,
 				luxSource,
 				lastLuxAt: initialPlant?.lastLuxAt ?? (/* @__PURE__ */ new Date()).toISOString(),
 				lastWateredAt: wateredIso,
@@ -57993,12 +58393,28 @@ var PlantFormModal = ({ isOpen, initialPlant, onClose, onSave }) => {
 						className: "w-full px-3.5 py-2.5 rounded-xl border border-[#D4D8CE] bg-white text-sm text-[#18221D] focus:outline-2 focus:outline-[#1F513B]"
 					})] }),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "grid grid-cols-1 sm:grid-cols-3 gap-4",
+						className: "grid grid-cols-1 sm:grid-cols-2 gap-4",
 						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+								htmlFor: "plant-avg-lux",
+								className: "block text-xs font-medium text-[#4B5850] mb-1.5",
+								children: "Average Daylight (lux)"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+								id: "plant-avg-lux",
+								type: "number",
+								min: 0,
+								max: 15e4,
+								value: avgLux,
+								onChange: (e) => {
+									setAvgLux(Math.max(0, Number(e.target.value) || 0));
+									setAvgLuxEdited(true);
+								},
+								className: "w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm font-mono tabular-nums text-[#18221D]"
+							})] }),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
 								htmlFor: "plant-lux",
 								className: "block text-xs font-medium text-[#4B5850] mb-1.5",
-								children: "Light Level (lux)"
+								children: "Latest Light Reading (lux)"
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 								id: "plant-lux",
 								type: "number",
@@ -58006,7 +58422,9 @@ var PlantFormModal = ({ isOpen, initialPlant, onClose, onSave }) => {
 								max: 15e4,
 								value: latestLux,
 								onChange: (e) => {
-									setLatestLux(Math.max(0, Number(e.target.value) || 0));
+									const nextVal = Math.max(0, Number(e.target.value) || 0);
+									setLatestLux(nextVal);
+									if (!avgLuxEdited && !initialPlant) setAvgLux(nextVal);
 									setLuxSource("manual");
 								},
 								className: "w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm font-mono tabular-nums text-[#18221D]"
@@ -58020,6 +58438,7 @@ var PlantFormModal = ({ isOpen, initialPlant, onClose, onSave }) => {
 								type: "number",
 								min: 1,
 								max: 90,
+								step: "0.5",
 								value: baseWaterDays,
 								onChange: (e) => setBaseWaterDays(Math.max(1, Number(e.target.value) || 7)),
 								className: "w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm font-mono tabular-nums text-[#18221D]"
@@ -58041,16 +58460,18 @@ var PlantFormModal = ({ isOpen, initialPlant, onClose, onSave }) => {
 						className: "space-y-1.5",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 							className: "block text-xs text-[#4B5850]",
-							children: "Quick north-window lux presets (or measure precisely in the Lux Meter tab):"
+							children: "Quick north-window lux presets (sets both latest & average daylight):"
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 							className: "flex flex-wrap gap-2",
 							children: LUX_REFERENCE_ZONES.map((zone) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								type: "button",
 								onClick: () => {
 									setLatestLux(zone.presetLux);
+									setAvgLux(zone.presetLux);
+									setAvgLuxEdited(true);
 									setLuxSource("manual");
 								},
-								className: `px-3 py-1.5 min-h-[36px] rounded-xl border text-xs transition-colors ${latestLux === zone.presetLux ? "border-[#1F513B] bg-[#EEF4F0] text-[#1F513B] font-medium" : "border-[#E4E6DF] bg-[#FAFBF8] text-[#4B5850] hover:text-[#18221D]"}`,
+								className: `px-3 py-1.5 min-h-[36px] rounded-xl border text-xs transition-colors ${avgLux === zone.presetLux ? "border-[#1F513B] bg-[#EEF4F0] text-[#1F513B] font-medium" : "border-[#E4E6DF] bg-[#FAFBF8] text-[#4B5850] hover:text-[#18221D]"}`,
 								children: [
 									zone.label,
 									" · ",
@@ -58147,20 +58568,34 @@ var PlantFormModal = ({ isOpen, initialPlant, onClose, onSave }) => {
 	})] });
 };
 // src/components/PlantDetailModal.tsx
-var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdatePhoto, onEdit, onOpenLuxForPlant, onDelete }) => {
+var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onSnoozeDamp, onUpdatePhoto, onEdit, onOpenLuxForPlant, onDelete }) => {
 	const [logs, setLogs] = (0, import_react.useState)([]);
+	const [growthPhotos, setGrowthPhotos] = (0, import_react.useState)([]);
 	const [cameraOpen, setCameraOpen] = (0, import_react.useState)(false);
+	const [cameraMode, setCameraMode] = (0, import_react.useState)("species");
 	const [busy, setBusy] = (0, import_react.useState)(false);
+	const [snoozing, setSnoozing] = (0, import_react.useState)(false);
 	const [lookingUp, setLookingUp] = (0, import_react.useState)(false);
 	const [lookupError, setLookupError] = (0, import_react.useState)(null);
+	const [analyzingGrowth, setAnalyzingGrowth] = (0, import_react.useState)(false);
+	const [growthError, setGrowthError] = (0, import_react.useState)(null);
+	const [selectedGrowthId, setSelectedGrowthId] = (0, import_react.useState)(null);
+	const [deletingPhotoId, setDeletingPhotoId] = (0, import_react.useState)(null);
 	const [confirmDelete, setConfirmDelete] = (0, import_react.useState)(false);
+	const plantId = plant?.id ?? null;
 	(0, import_react.useEffect)(() => {
-		if (!plant) return;
+		if (!plantId) return;
 		setConfirmDelete(false);
 		setLookupError(null);
-		const unsub = subscribePlantLogs(userId, plant.id, setLogs);
-		return () => unsub();
-	}, [userId, plant]);
+		setGrowthError(null);
+		setSelectedGrowthId(null);
+		const unsubLogs = subscribePlantLogs(userId, plantId, setLogs);
+		const unsubGrowth = subscribeGrowthPhotos(userId, plantId, setGrowthPhotos);
+		return () => {
+			unsubLogs();
+			unsubGrowth();
+		};
+	}, [userId, plantId]);
 	if (!plant) return null;
 	const now = /* @__PURE__ */ new Date();
 	const calc = calculateWateringSchedule(plant, monthlyTemps, now);
@@ -58182,6 +58617,14 @@ var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdat
 			await onWater(plant);
 		} finally {
 			setBusy(false);
+		}
+	};
+	const handleSnoozeDamp = async () => {
+		setSnoozing(true);
+		try {
+			await onSnoozeDamp(plant);
+		} finally {
+			setSnoozing(false);
 		}
 	};
 	const handlePhotoAndLookup = async (dataUrl) => {
@@ -58210,6 +58653,100 @@ var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdat
 			setLookingUp(false);
 		}
 	};
+	const handleGrowthPhotoCaptured = async (dataUrl) => {
+		setAnalyzingGrowth(true);
+		setGrowthError(null);
+		const previousPhoto = growthPhotos[0];
+		try {
+			const newId = await addGrowthPhoto(userId, plant, dataUrl, await analyzePlantGrowth({
+				currentPhotoDataUrl: dataUrl,
+				previousPhotoDataUrl: previousPhoto?.photoDataUrl || plant.photoDataUrl || void 0,
+				previousRecordedAt: previousPhoto?.recordedAt,
+				plant,
+				effectiveTempC: calc.effectiveTempC,
+				effectiveHumidityPct: calc.effectiveHumidityPct,
+				daylightHours: calc.daylightHours
+			}), true);
+			setSelectedGrowthId(newId);
+		} catch (err) {
+			if (err instanceof ApiUnreachableError) {
+				const newId = await addGrowthPhoto(userId, plant, dataUrl, buildLocalGrowthFallbackAssessment({
+					plant,
+					calc,
+					avgRecordedLux: luxStats.avgRecordedLux,
+					hasPreviousPhoto: Boolean(previousPhoto || plant.photoDataUrl)
+				}), true);
+				setSelectedGrowthId(newId);
+				setGrowthError(`Saved photo to timeline using local light/watering check. ${err.message}`);
+			} else setGrowthError(err instanceof Error ? err.message : "Could not analyze plant growth from that photo.");
+		} finally {
+			setAnalyzingGrowth(false);
+		}
+	};
+	const handleCheckExistingCoverPhoto = async () => {
+		if (!plant.photoDataUrl) return;
+		setAnalyzingGrowth(true);
+		setGrowthError(null);
+		try {
+			const analysis = await analyzePlantGrowth({
+				currentPhotoDataUrl: plant.photoDataUrl,
+				plant,
+				effectiveTempC: calc.effectiveTempC,
+				effectiveHumidityPct: calc.effectiveHumidityPct,
+				daylightHours: calc.daylightHours
+			});
+			const newId = await addGrowthPhoto(userId, plant, plant.photoDataUrl, analysis, false);
+			setSelectedGrowthId(newId);
+		} catch (err) {
+			if (err instanceof ApiUnreachableError) {
+				const fallback = buildLocalGrowthFallbackAssessment({
+					plant,
+					calc,
+					avgRecordedLux: luxStats.avgRecordedLux,
+					hasPreviousPhoto: false
+				});
+				const newId = await addGrowthPhoto(userId, plant, plant.photoDataUrl, fallback, false);
+				setSelectedGrowthId(newId);
+				setGrowthError(`Saved baseline photo using local light/watering check. ${err.message}`);
+			} else setGrowthError(err instanceof Error ? err.message : "Could not analyze current plant photo.");
+		} finally {
+			setAnalyzingGrowth(false);
+		}
+	};
+	const handleReanalyzeGrowthPhoto = async (entry) => {
+		setAnalyzingGrowth(true);
+		setGrowthError(null);
+		try {
+			const entryIdx = growthPhotos.findIndex((p) => p.id === entry.id);
+			const earlierPhoto = entryIdx >= 0 && entryIdx + 1 < growthPhotos.length ? growthPhotos[entryIdx + 1] : void 0;
+			const newId = await replaceGrowthPhotoAnalysis(userId, plant, entry, await analyzePlantGrowth({
+				currentPhotoDataUrl: entry.photoDataUrl,
+				previousPhotoDataUrl: earlierPhoto?.photoDataUrl,
+				previousRecordedAt: earlierPhoto?.recordedAt,
+				plant,
+				effectiveTempC: calc.effectiveTempC,
+				effectiveHumidityPct: calc.effectiveHumidityPct,
+				daylightHours: calc.daylightHours
+			}));
+			setSelectedGrowthId(newId);
+		} catch (err) {
+			setGrowthError(err instanceof Error ? err.message : "Could not run online growth diagnosis.");
+		} finally {
+			setAnalyzingGrowth(false);
+		}
+	};
+	const handleDeleteGrowthPhoto = async (photoId) => {
+		setDeletingPhotoId(photoId);
+		setGrowthError(null);
+		try {
+			await deleteGrowthPhoto(userId, plant.id, photoId);
+			if (selectedGrowthId === photoId) setSelectedGrowthId(null);
+		} catch (err) {
+			setGrowthError(err instanceof Error ? err.message : "Could not remove growth photo.");
+		} finally {
+			setDeletingPhotoId(null);
+		}
+	};
 	const handleDelete = async () => {
 		setBusy(true);
 		try {
@@ -58219,6 +58756,9 @@ var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdat
 			setBusy(false);
 		}
 	};
+	const inspectedGrowthPhoto = growthPhotos.find((p) => p.id === selectedGrowthId) ?? growthPhotos[0] ?? null;
+	const earliestGrowthPhoto = growthPhotos.length >= 2 ? growthPhotos[growthPhotos.length - 1] : null;
+	const latestGrowthPhoto = growthPhotos.length >= 2 ? growthPhotos[0] : null;
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 		className: "fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 backdrop-blur-xs p-0 sm:p-4",
 		role: "dialog",
@@ -58279,7 +58819,10 @@ var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdat
 								})]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								type: "button",
-								onClick: () => setCameraOpen(true),
+								onClick: () => {
+									setCameraMode("species");
+									setCameraOpen(true);
+								},
 								className: "absolute bottom-2.5 right-2.5 min-h-[40px] px-3 py-1.5 rounded-xl bg-black/70 text-white text-xs font-medium inline-flex items-center gap-1.5 hover:bg-black/85 backdrop-blur-xs",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-3.5 h-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: plant.photoDataUrl ? "Retake & Lookup" : "Snap & Lookup" })]
 							})]
@@ -58318,6 +58861,10 @@ var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdat
 												calc.daysSinceWatered,
 												"d ago)"
 											]
+										}),
+										calc.isSnoozed && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "text-xs font-medium text-[#1F513B]",
+											children: "Snoozed (+2d) after soil-moisture check"
 										})
 									]
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -58393,23 +58940,281 @@ var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdat
 								})]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "flex flex-wrap gap-2.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									disabled: busy,
-									onClick: () => void handleWater(),
-									className: "flex-1 min-h-[44px] px-4 py-2 rounded-xl bg-[#1F513B] text-white text-sm font-medium inline-flex items-center justify-center gap-2 hover:bg-[#173E2D]",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Droplets, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: busy ? "Saving..." : "Water Now" })]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									type: "button",
-									onClick: () => {
-										onClose();
-										onOpenLuxForPlant(plant);
-									},
-									className: "min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#18221D] text-sm font-medium inline-flex items-center gap-1.5 hover:bg-[#F0F1EC]",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sun, { className: "w-4 h-4 text-[#B45309]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Log Lux" })]
-								})]
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										disabled: busy || snoozing,
+										onClick: () => void handleWater(),
+										className: "flex-1 min-h-[44px] px-4 py-2 rounded-xl bg-[#1F513B] text-white text-sm font-medium inline-flex items-center justify-center gap-2 hover:bg-[#173E2D]",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Droplets, { className: "w-4 h-4" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: busy ? "Saving..." : "Water Now" })]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										disabled: busy || snoozing,
+										onClick: () => void handleSnoozeDamp(),
+										title: "Postpone watering by 2 days and lengthen base interval",
+										className: "min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#18221D] text-sm font-medium inline-flex items-center gap-1.5 hover:bg-[#F0F1EC]",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Clock, { className: "w-4 h-4 text-[#1F513B]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: snoozing ? "Snoozing..." : "Still Damp (+2d)" })]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										onClick: () => {
+											onClose();
+											onOpenLuxForPlant(plant);
+										},
+										className: "min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#18221D] text-sm font-medium inline-flex items-center gap-1.5 hover:bg-[#F0F1EC]",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sun, { className: "w-4 h-4 text-[#B45309]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Log Lux" })]
+									})
+								]
 							})]
 						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "rounded-2xl bg-[#FAFBF8] border border-[#E4E6DF] p-4 space-y-4",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex flex-wrap items-start justify-between gap-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "space-y-0.5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center gap-2",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TrendingUp, { className: "w-4 h-4 text-[#1F513B]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+											className: "text-sm font-semibold text-[#18221D]",
+											children: "Growth & Health Timeline"
+										})]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-xs text-[#4B5850]",
+										children: "Snap dated photos to track new growth and spot light, watering, or leaf issues early."
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex flex-wrap items-center gap-2",
+									children: [growthPhotos.length === 0 && plant.photoDataUrl && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										disabled: analyzingGrowth,
+										onClick: () => void handleCheckExistingCoverPhoto(),
+										className: "min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-xs font-medium text-[#18221D] hover:bg-[#F0F1EC] inline-flex items-center gap-1.5 disabled:opacity-60",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Eye, { className: "w-3.5 h-3.5 text-[#1F513B]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Check Current Photo" })]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+										type: "button",
+										disabled: analyzingGrowth,
+										onClick: () => {
+											setCameraMode("growth");
+											setCameraOpen(true);
+										},
+										className: "min-h-[44px] px-3.5 py-2 rounded-xl bg-[#1F513B] text-white text-xs font-medium hover:bg-[#173E2D] inline-flex items-center gap-1.5 disabled:opacity-60",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-3.5 h-3.5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Snap Growth Photo" })]
+									})]
+								})]
+							}),
+							analyzingGrowth && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "p-3 rounded-xl bg-[#EEF4F0] text-xs font-medium text-[#1F513B] flex items-center gap-2",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, { className: "w-4 h-4 animate-spin shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Comparing growth & checking plant health..." })]
+							}),
+							growthError && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-[#B45309]",
+								children: growthError
+							}),
+							inspectedGrowthPhoto ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "space-y-4",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: `rounded-xl border p-3.5 space-y-2.5 ${inspectedGrowthPhoto.healthStatus === "issue" ? "bg-red-50/70 border-red-200" : inspectedGrowthPhoto.healthStatus === "watch" ? "bg-amber-50/70 border-amber-200" : "bg-[#EEF4F0]/70 border-[#CFE0D5]"}`,
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex flex-wrap items-center justify-between gap-2",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "inline-flex items-center gap-1.5 text-xs font-semibold",
+													children: inspectedGrowthPhoto.healthStatus === "issue" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TriangleAlert, { className: "w-4 h-4 text-[#B91C1C]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "text-[#B91C1C]",
+														children: "Growth Issue Detected"
+													})] }) : inspectedGrowthPhoto.healthStatus === "watch" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Eye, { className: "w-4 h-4 text-[#B45309]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "text-[#B45309]",
+														children: "Watch Closely"
+													})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleCheck, { className: "w-4 h-4 text-[#1F513B]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "text-[#1F513B]",
+														children: "Optimal Growth"
+													})] })
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+													className: "text-[11px] font-mono tabular-nums text-[#4B5850]",
+													children: [
+														new Date(inspectedGrowthPhoto.recordedAt).toLocaleDateString("en-GB", {
+															day: "numeric",
+															month: "short",
+															year: "numeric"
+														}),
+														" ",
+														"· ",
+														inspectedGrowthPhoto.avgLuxSnapshot,
+														" lx avg"
+													]
+												})]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "space-y-1.5 text-xs leading-relaxed",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+														className: "text-[#18221D]",
+														children: [
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: "font-semibold",
+																children: "Growth observed:"
+															}),
+															" ",
+															inspectedGrowthPhoto.growthSummary
+														]
+													}),
+													inspectedGrowthPhoto.issueDetected && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+														className: "text-[#991B1B] bg-white/80 border border-red-200/80 rounded-lg px-2.5 py-2",
+														children: [
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: "font-semibold",
+																children: "What looks wrong:"
+															}),
+															" ",
+															inspectedGrowthPhoto.issueDetected
+														]
+													}),
+													inspectedGrowthPhoto.recommendedAction && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+														className: "text-[#323E37]",
+														children: [
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: "font-semibold text-[#18221D]",
+																children: "Next step:"
+															}),
+															" ",
+															inspectedGrowthPhoto.recommendedAction
+														]
+													})
+												]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "pt-1 flex justify-end",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													type: "button",
+													disabled: analyzingGrowth,
+													onClick: () => void handleReanalyzeGrowthPhoto(inspectedGrowthPhoto),
+													className: "min-h-[36px] px-2.5 py-1 rounded-lg border border-[#D4D8CE] bg-white text-[11px] font-medium text-[#1F513B] hover:bg-[#F0F1EC] inline-flex items-center gap-1.5 disabled:opacity-60",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RefreshCw, { className: "w-3 h-3" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Analyze Photo Online" })]
+												})
+											})
+										]
+									}),
+									earliestGrowthPhoto && latestGrowthPhoto && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "space-y-2",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+											className: "text-[11px] font-semibold uppercase tracking-wide text-[#4B5850]",
+											children: [
+												"Before → Now (",
+												growthPhotos.length,
+												" photos)"
+											]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "grid grid-cols-2 gap-3",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "rounded-xl border border-[#E4E6DF] bg-white overflow-hidden",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "aspect-[4/3] bg-[#EEF4F0]",
+													children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+														src: earliestGrowthPhoto.photoDataUrl,
+														alt: "First growth snapshot",
+														className: "w-full h-full object-cover"
+													})
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "px-2.5 py-1.5 flex items-center justify-between text-[11px]",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-medium text-[#4B5850]",
+														children: "First"
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-mono tabular-nums text-[#18221D]",
+														children: new Date(earliestGrowthPhoto.recordedAt).toLocaleDateString("en-GB", {
+															day: "numeric",
+															month: "short"
+														})
+													})]
+												})]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "rounded-xl border border-[#1F513B]/40 bg-white overflow-hidden",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "aspect-[4/3] bg-[#EEF4F0]",
+													children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+														src: latestGrowthPhoto.photoDataUrl,
+														alt: "Latest growth snapshot",
+														className: "w-full h-full object-cover"
+													})
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "px-2.5 py-1.5 flex items-center justify-between text-[11px]",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-semibold text-[#1F513B]",
+														children: "Latest"
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "font-mono tabular-nums text-[#18221D]",
+														children: new Date(latestGrowthPhoto.recordedAt).toLocaleDateString("en-GB", {
+															day: "numeric",
+															month: "short"
+														})
+													})]
+												})]
+											})]
+										})]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+										className: "grid grid-cols-2 sm:grid-cols-3 gap-2.5",
+										children: growthPhotos.map((entry) => {
+											const isSelected = entry.id === inspectedGrowthPhoto.id;
+											const statusLabel = entry.healthStatus === "issue" ? "Issue" : entry.healthStatus === "watch" ? "Watch" : "Optimal";
+											const statusColor = entry.healthStatus === "issue" ? "text-[#B91C1C]" : entry.healthStatus === "watch" ? "text-[#B45309]" : "text-[#1F513B]";
+											return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: `rounded-xl border bg-white overflow-hidden transition-colors ${isSelected ? "border-[#1F513B] ring-1 ring-[#1F513B]/30" : "border-[#E4E6DF]"}`,
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													type: "button",
+													onClick: () => setSelectedGrowthId(entry.id),
+													className: "w-full text-left block",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "aspect-[4/3] bg-[#EEF4F0]",
+														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+															src: entry.photoDataUrl,
+															alt: `Growth check ${new Date(entry.recordedAt).toLocaleDateString("en-GB")}`,
+															className: "w-full h-full object-cover"
+														})
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "px-2.5 pt-2 pb-1 space-y-0.5",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+															className: "flex items-center justify-between gap-1 text-[11px]",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: `font-semibold ${statusColor}`,
+																children: statusLabel
+															}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: "font-mono tabular-nums text-[#4B5850]",
+																children: new Date(entry.recordedAt).toLocaleDateString("en-GB", {
+																	day: "numeric",
+																	month: "short"
+																})
+															})]
+														}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+															className: "text-[11px] text-[#4B5850] line-clamp-2",
+															children: entry.growthSummary
+														})]
+													})]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+													className: "px-2 pb-1.5 flex justify-end",
+													children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+														type: "button",
+														disabled: deletingPhotoId === entry.id,
+														onClick: () => void handleDeleteGrowthPhoto(entry.id),
+														"aria-label": "Delete growth photo",
+														className: "min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg text-[#728078] hover:text-[#B91C1C] hover:bg-red-50",
+														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "w-3.5 h-3.5" })
+													})
+												})]
+											}, entry.id);
+										})
+									})
+								]
+							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-xs text-[#4B5850]",
+								children: "No growth checks yet. Snap your first progress photo to establish a baseline and diagnose any light or watering stress."
+							})
+						]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "rounded-2xl bg-[#FAFBF8] border border-[#E4E6DF] p-4 space-y-2.5",
@@ -58452,9 +59257,9 @@ var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdat
 							children: [
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "px-4 py-2.5 flex items-center justify-between text-xs",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 										className: "text-[#4B5850]",
-										children: "Species base interval"
+										children: ["Base interval", (plant.dampSnoozeCount ?? 0) > 0 ? ` (calibrated from ${plant.dampSnoozeCount} damp ${plant.dampSnoozeCount === 1 ? "check" : "checks"})` : ""]
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 										className: "font-mono tabular-nums font-medium text-[#18221D]",
 										children: [plant.baseWaterDays, " days"]
@@ -58526,7 +59331,7 @@ var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdat
 									children: [
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "font-medium text-[#18221D]",
-											children: log.logType === "water" ? "Watered" : `Measured ${log.luxValue} lux`
+											children: log.logType === "water" ? "Watered" : log.logType === "snooze" ? "Still damp check" : `Measured ${log.luxValue} lux`
 										}),
 										log.logType === "lux" && log.readingPeriod === "peak_noon" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 											className: "text-[#1F513B]",
@@ -58588,8 +59393,11 @@ var PlantDetailModal = ({ userId, plant, monthlyTemps, onClose, onWater, onUpdat
 	}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CameraModal, {
 		isOpen: cameraOpen,
 		onClose: () => setCameraOpen(false),
-		onCapture: (dataUrl) => void handlePhotoAndLookup(dataUrl),
-		title: `Update Photo · ${plant.name}`
+		onCapture: (dataUrl) => {
+			if (cameraMode === "growth") handleGrowthPhotoCaptured(dataUrl);
+			else handlePhotoAndLookup(dataUrl);
+		},
+		title: cameraMode === "growth" ? `Growth Check · ${plant.name}` : `Update Photo · ${plant.name}`
 	})] });
 };
 // src/lib/nativeWidget.ts
@@ -58744,6 +59552,10 @@ var MainApp = () => {
 		if (!user) return;
 		await markPlantWatered(user.uid, plant, plant.entryType === "group" ? `Watered group of ${plant.quantity}` : "Watered");
 	};
+	const handleSnoozeDamp = async (plant) => {
+		if (!user) return;
+		await snoozePlantDamp(user.uid, plant, monthlyTemps);
+	};
 	const handleUpdatePhoto = async (plantId, dataUrl, lookup) => {
 		if (!user) return;
 		await updatePlantPhotoAndCare(user.uid, plantId, dataUrl, lookup);
@@ -58753,11 +59565,11 @@ var MainApp = () => {
 		await deletePlant(user.uid, plant.id);
 		if (detailPlantId === plant.id) setDetailPlantId(null);
 	};
-	const handleSaveLux = async (plantId, luxValue, source, readingPeriod, note) => {
+	const handleSaveLux = async (plantId, luxValue, source, readingPeriod, note, mode = "append") => {
 		if (!user) return;
 		const targetPlant = plants.find((p) => p.id === plantId);
 		if (!targetPlant) return;
-		await recordPlantLux(user.uid, targetPlant, luxValue, source, readingPeriod, note);
+		await recordPlantLux(user.uid, targetPlant, luxValue, source, readingPeriod, note, mode);
 	};
 	const handleSaveMonthlyTemp = async (input, existsAlready) => {
 		if (!user) return;
@@ -58934,6 +59746,7 @@ var MainApp = () => {
 						},
 						onSelectPlant: (plant) => setDetailPlantId(plant.id),
 						onWaterPlant: handleWaterPlant,
+						onSnoozeDamp: handleSnoozeDamp,
 						onAddPlant: () => {
 							setEditingPlant(null);
 							setFormOpen(true);
@@ -58951,6 +59764,7 @@ var MainApp = () => {
 						onBackToWidget: () => navigateTo("widget"),
 						onSelectPlant: (plant) => setDetailPlantId(plant.id),
 						onWaterPlant: handleWaterPlant,
+						onSnoozeDamp: handleSnoozeDamp,
 						onAddPlant: () => {
 							setEditingPlant(null);
 							setFormOpen(true);
@@ -59025,6 +59839,7 @@ var MainApp = () => {
 				monthlyTemps,
 				onClose: () => setDetailPlantId(null),
 				onWater: handleWaterPlant,
+				onSnoozeDamp: handleSnoozeDamp,
 				onUpdatePhoto: handleUpdatePhoto,
 				onEdit: (plant) => {
 					setEditingPlant(plant);

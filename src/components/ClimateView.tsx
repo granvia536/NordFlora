@@ -36,6 +36,9 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
   const [humidityPct, setHumidityPct] = useState<number>(
     existingRecord?.humidityPct ?? baseline.avgHumidityPct,
   );
+  const [daylightHours, setDaylightHours] = useState<number>(
+    existingRecord?.daylightHours ?? baseline.daylightHours,
+  );
   const [heatingOrAc, setHeatingOrAc] = useState<HeatingOrAc>(
     existingRecord?.heatingOrAc ?? 'natural_vent',
   );
@@ -51,6 +54,7 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
     setMinTempC(rec?.minTempC ?? Number((base.avgIndoorTempC - 2).toFixed(1)));
     setMaxTempC(rec?.maxTempC ?? Number((base.avgIndoorTempC + 2).toFixed(1)));
     setHumidityPct(rec?.humidityPct ?? base.avgHumidityPct);
+    setDaylightHours(rec?.daylightHours ?? base.daylightHours);
     setHeatingOrAc(rec?.heatingOrAc ?? 'natural_vent');
     setNote(rec?.note ?? '');
     setSavedMsg(null);
@@ -75,11 +79,14 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
           maxTempC,
           humidityPct,
           heatingOrAc,
+          daylightHours,
           note,
         },
         Boolean(existingRecord),
       );
-      setSavedMsg(`Saved ${formatMonthLabel(selectedMonthKey)} (${avgTempC.toFixed(1)}°C)`);
+      setSavedMsg(
+        `Saved ${formatMonthLabel(selectedMonthKey)} (${avgTempC.toFixed(1)}°C · ${daylightHours.toFixed(1)}h)`,
+      );
     } finally {
       setSaving(false);
     }
@@ -89,11 +96,11 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#18221D]">
-          Monthly Room Temperature &amp; Air Humidity
+          Monthly Room Temp, Humidity &amp; Daylight
         </h1>
         <p className="text-sm text-[#4B5850] mt-1">
-          Record your apartment&apos;s monthly room temperature (°C) and air humidity (% RH) so
-          watering schedules adapt to Barcelona winter heating and summer heat.
+          Record and edit your monthly indoor temperature (°C), air humidity (% RH), and average
+          daylight hours so watering intervals match your exact window conditions.
         </p>
       </div>
 
@@ -169,7 +176,7 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="humidity-pct" className="block text-xs font-medium text-[#4B5850] mb-1.5">
                   Room Humidity (%)
@@ -185,21 +192,39 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="hvac-mode" className="block text-xs font-medium text-[#4B5850] mb-1.5">
-                  Heating / Ventilation
+                <label htmlFor="daylight-hours" className="block text-xs font-medium text-[#4B5850] mb-1.5">
+                  Avg Daylight (hrs/day)
                 </label>
-                <select
-                  id="hvac-mode"
-                  value={heatingOrAc}
-                  onChange={(e) => setHeatingOrAc(e.target.value as HeatingOrAc)}
-                  className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm"
-                >
-                  <option value="natural_vent">Window / Natural Vent</option>
-                  <option value="heating">Radiator / Heating On</option>
-                  <option value="ac">Air Conditioning</option>
-                  <option value="none">Unconditioned</option>
-                </select>
+                <input
+                  id="daylight-hours"
+                  type="number"
+                  step="0.5"
+                  min={0.5}
+                  max={18}
+                  value={daylightHours}
+                  onChange={(e) =>
+                    setDaylightHours(Math.max(0.5, Math.min(18, Number(e.target.value) || baseline.daylightHours)))
+                  }
+                  className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] text-sm font-mono tabular-nums"
+                />
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="hvac-mode" className="block text-xs font-medium text-[#4B5850] mb-1.5">
+                Heating / Ventilation
+              </label>
+              <select
+                id="hvac-mode"
+                value={heatingOrAc}
+                onChange={(e) => setHeatingOrAc(e.target.value as HeatingOrAc)}
+                className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm"
+              >
+                <option value="natural_vent">Window / Natural Vent</option>
+                <option value="heating">Radiator / Heating On</option>
+                <option value="ac">Air Conditioning</option>
+                <option value="none">Unconditioned</option>
+              </select>
             </div>
 
             <div>
@@ -225,7 +250,7 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
                 </span>
               ) : (
                 <span className="text-xs text-[#4B5850]">
-                  Barcelona baseline: {baseline.avgIndoorTempC}°C · {baseline.avgHumidityPct}% RH
+                  BCN baseline: {baseline.avgIndoorTempC}°C · {baseline.avgHumidityPct}% · {baseline.daylightHours}h
                 </span>
               )}
 
@@ -244,10 +269,10 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
         <section className="lg:col-span-7 rounded-2xl bg-white border border-[#E4E6DF] p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-semibold text-[#18221D]">
-              {currentYear} Monthly Log &amp; Photoperiod
+              {currentYear} Monthly Log &amp; Daylight
             </h2>
             <span className="text-xs text-[#4B5850]">
-              Tap any month to edit its room temperature
+              Tap any month to edit temp, humidity &amp; daylight hours
             </span>
           </div>
 
@@ -258,6 +283,7 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
               const rec = monthlyTemps.find((t) => t.monthKey === mk);
               const isSelected = mk === selectedMonthKey;
               const tempDisplay = rec ? rec.avgTempC : base.avgIndoorTempC;
+              const daylightDisplay = rec?.daylightHours ?? base.daylightHours;
 
               return (
                 <button
@@ -273,7 +299,7 @@ export const ClimateView: React.FC<ClimateViewProps> = ({
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-[#18221D]">{base.shortName}</span>
                     <span className="text-[11px] text-[#4B5850] font-mono tabular-nums">
-                      {base.daylightHours}h
+                      {daylightDisplay.toFixed(1)}h
                     </span>
                   </div>
                   <p className="text-lg font-semibold font-mono tabular-nums text-[#18221D] mt-1">

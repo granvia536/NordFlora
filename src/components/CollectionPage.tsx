@@ -2,6 +2,7 @@ import React, {useMemo, useState} from 'react';
 import {
   ArrowLeft,
   Camera,
+  Clock,
   Droplets,
   Leaf,
   Plus,
@@ -24,6 +25,7 @@ interface CollectionPageProps {
   onBackToWidget: () => void;
   onSelectPlant: (plant: PlantRecord) => void;
   onWaterPlant: (plant: PlantRecord) => Promise<void>;
+  onSnoozeDamp: (plant: PlantRecord) => Promise<void>;
   onAddPlant: () => void;
   onOpenLuxForPlant: (plant: PlantRecord) => void;
 }
@@ -35,12 +37,14 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
   onBackToWidget,
   onSelectPlant,
   onWaterPlant,
+  onSnoozeDamp,
   onAddPlant,
   onOpenLuxForPlant,
 }) => {
   const [filter, setFilter] = useState<'all' | 'due' | 'group' | 'individual'>(initialFilter);
   const [searchQuery, setSearchQuery] = useState('');
   const [wateringId, setWateringId] = useState<string | null>(null);
+  const [snoozingId, setSnoozingId] = useState<string | null>(null);
 
   const now = new Date();
   const monthBaseline = BARCELONA_MONTHLY_BASELINE[now.getMonth() + 1];
@@ -83,6 +87,16 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
       await onWaterPlant(plant);
     } finally {
       setWateringId(null);
+    }
+  };
+
+  const handleSnoozeDamp = async (e: React.MouseEvent, plant: PlantRecord) => {
+    e.stopPropagation();
+    setSnoozingId(plant.id);
+    try {
+      await onSnoozeDamp(plant);
+    } finally {
+      setSnoozingId(null);
     }
   };
 
@@ -245,6 +259,12 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
                       <span className="font-mono tabular-nums">
                         Every {calc.adjustedIntervalDays}d
                       </span>
+                      {calc.isSnoozed && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-[#1F513B] font-medium">Snoozed +2d</span>
+                        </>
+                      )}
                       {getPlantAverageLuxStats(plant, undefined, now).dueForMonthlyLux && (
                         <>
                           <span aria-hidden="true">·</span>
@@ -261,7 +281,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
                     )}
                   </div>
 
-                  <div className="pt-3 border-t border-[#EEF0EA] flex items-center justify-between gap-2">
+                  <div className="pt-3 border-t border-[#EEF0EA] flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <span className={`text-sm font-semibold block ${statusColor}`}>
                         {formatDueSummary(calc.daysUntilWater)}
@@ -272,6 +292,19 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {calc.daysUntilWater <= 0 && (
+                        <button
+                          type="button"
+                          disabled={wateringId === plant.id || snoozingId === plant.id}
+                          onClick={(e) => void handleSnoozeDamp(e, plant)}
+                          title="Still damp — postpone +2 days and calibrate interval"
+                          className="min-h-[44px] px-3 py-2 rounded-xl border border-[#D4D8CE] bg-white text-[#4B5850] hover:text-[#18221D] hover:bg-[#F0F1EC] text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                        >
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>{snoozingId === plant.id ? 'Saving...' : 'Damp +2d'}</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         aria-label={`Measure lux for ${plant.name}`}
@@ -286,7 +319,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({
 
                       <button
                         type="button"
-                        disabled={wateringId === plant.id}
+                        disabled={wateringId === plant.id || snoozingId === plant.id}
                         onClick={(e) => void handleWater(e, plant)}
                         className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#EEF4F0] text-[#1F513B] hover:bg-[#1F513B] hover:text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
                       >

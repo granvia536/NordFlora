@@ -65,6 +65,10 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
   );
   const [potSize, setPotSize] = useState<PotSize>(initialPlant?.potSize ?? 'medium');
   const [latestLux, setLatestLux] = useState<number>(initialPlant?.latestLux ?? 350);
+  const [avgLux, setAvgLux] = useState<number>(
+    initialPlant?.avgLux ?? initialPlant?.latestLux ?? 350,
+  );
+  const [avgLuxEdited, setAvgLuxEdited] = useState<boolean>(false);
   const [luxSource, setLuxSource] = useState<LuxSource>(initialPlant?.luxSource ?? 'manual');
   const [lastWateredDate, setLastWateredDate] = useState<string>(
     toLocalDateInput(initialPlant?.lastWateredAt ?? new Date().toISOString()),
@@ -175,7 +179,7 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
         potSize,
         baseWaterDays,
         latestLux,
-        avgLux: (initialPlant?.luxReadingCount ?? 1) <= 1 ? latestLux : undefined,
+        avgLux,
         luxSource,
         lastLuxAt: initialPlant?.lastLuxAt ?? new Date().toISOString(),
         lastWateredAt: wateredIso,
@@ -459,13 +463,34 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
             </div>
 
             {/* Light Level & Watering Anchor */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="plant-avg-lux"
+                  className="block text-xs font-medium text-[#4B5850] mb-1.5"
+                >
+                  Average Daylight (lux)
+                </label>
+                <input
+                  id="plant-avg-lux"
+                  type="number"
+                  min={0}
+                  max={150000}
+                  value={avgLux}
+                  onChange={(e) => {
+                    setAvgLux(Math.max(0, Number(e.target.value) || 0));
+                    setAvgLuxEdited(true);
+                  }}
+                  className="w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm font-mono tabular-nums text-[#18221D]"
+                />
+              </div>
+
               <div>
                 <label
                   htmlFor="plant-lux"
                   className="block text-xs font-medium text-[#4B5850] mb-1.5"
                 >
-                  Light Level (lux)
+                  Latest Light Reading (lux)
                 </label>
                 <input
                   id="plant-lux"
@@ -474,7 +499,11 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
                   max={150000}
                   value={latestLux}
                   onChange={(e) => {
-                    setLatestLux(Math.max(0, Number(e.target.value) || 0));
+                    const nextVal = Math.max(0, Number(e.target.value) || 0);
+                    setLatestLux(nextVal);
+                    if (!avgLuxEdited && !initialPlant) {
+                      setAvgLux(nextVal);
+                    }
                     setLuxSource('manual');
                   }}
                   className="w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm font-mono tabular-nums text-[#18221D]"
@@ -493,6 +522,7 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
                   type="number"
                   min={1}
                   max={90}
+                  step="0.5"
                   value={baseWaterDays}
                   onChange={(e) => setBaseWaterDays(Math.max(1, Number(e.target.value) || 7))}
                   className="w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-[#D4D8CE] bg-white text-sm font-mono tabular-nums text-[#18221D]"
@@ -519,7 +549,7 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
             {/* Quick North-Window Lux Presets */}
             <div className="space-y-1.5">
               <span className="block text-xs text-[#4B5850]">
-                Quick north-window lux presets (or measure precisely in the Lux Meter tab):
+                Quick north-window lux presets (sets both latest &amp; average daylight):
               </span>
               <div className="flex flex-wrap gap-2">
                 {LUX_REFERENCE_ZONES.map((zone) => (
@@ -528,10 +558,12 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
                     type="button"
                     onClick={() => {
                       setLatestLux(zone.presetLux);
+                      setAvgLux(zone.presetLux);
+                      setAvgLuxEdited(true);
                       setLuxSource('manual');
                     }}
                     className={`px-3 py-1.5 min-h-[36px] rounded-xl border text-xs transition-colors ${
-                      latestLux === zone.presetLux
+                      avgLux === zone.presetLux
                         ? 'border-[#1F513B] bg-[#EEF4F0] text-[#1F513B] font-medium'
                         : 'border-[#E4E6DF] bg-[#FAFBF8] text-[#4B5850] hover:text-[#18221D]'
                     }`}

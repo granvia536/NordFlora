@@ -431,13 +431,17 @@ export function calculateWateringSchedule(
     detail: `${effectiveTempC.toFixed(1)}°C`,
   });
 
-  // 3. Barcelona 41.39°N seasonal photoperiod factor (12h = 1.0x)
-  const photoDelta = baseline.daylightHours - 12;
-  const photoMult = Math.max(0.88, Math.min(1.14, Number((1 - photoDelta * 0.032).toFixed(2))));
+  const effectiveDaylightHours = recordedMonth?.daylightHours ?? baseline.daylightHours;
+  const daylightSource =
+    recordedMonth?.daylightHours !== undefined ? 'recorded' : 'baseline';
+
+  // 3. Barcelona 41.39°N seasonal / recorded daylight hours factor (12h = 1.0x)
+  const photoDelta = effectiveDaylightHours - 12;
+  const photoMult = Math.max(0.84, Math.min(1.18, Number((1 - photoDelta * 0.032).toFixed(2))));
   factors.push({
-    label: 'Barcelona north photoperiod',
+    label: daylightSource === 'recorded' ? 'Recorded daylight hours' : 'Barcelona north photoperiod',
     multiplier: photoMult,
-    detail: `${baseline.daylightHours.toFixed(1)}h daylight (${baseline.shortName})`,
+    detail: `${effectiveDaylightHours.toFixed(1)}h/day (${baseline.shortName})`,
   });
 
   // 4. Indoor humidity factor (reference 60% RH = 1.0x)
@@ -478,7 +482,24 @@ export function calculateWateringSchedule(
     0,
     Math.round((todayStart.getTime() - wateredStart.getTime()) / msPerDay),
   );
-  const nextWaterDate = new Date(wateredStart.getTime() + adjustedIntervalDays * msPerDay);
+  const formulaNextDate = new Date(wateredStart.getTime() + adjustedIntervalDays * msPerDay);
+
+  let nextWaterDate = formulaNextDate;
+  let isSnoozed = false;
+  if (plant.snoozedUntilAt) {
+    const parsedSnooze = new Date(plant.snoozedUntilAt);
+    if (!Number.isNaN(parsedSnooze.getTime())) {
+      const snoozeDay = startOfLocalDay(parsedSnooze);
+      if (
+        snoozeDay.getTime() > wateredStart.getTime() &&
+        snoozeDay.getTime() > formulaNextDate.getTime()
+      ) {
+        nextWaterDate = snoozeDay;
+        isSnoozed = true;
+      }
+    }
+  }
+
   const daysUntilWater = Math.round(
     (nextWaterDate.getTime() - todayStart.getTime()) / msPerDay,
   );
@@ -512,8 +533,51 @@ export function calculateWateringSchedule(
     tempSource,
     effectiveTempC,
     effectiveHumidityPct,
-    daylightHours: baseline.daylightHours,
+    daylightHours: effectiveDaylightHours,
+    isSnoozed,
     factors,
+  };
+}
+
+export interface DampSnoozeCalibration {
+  snoozedUntilAt: string;
+  nextBaseWaterDays: number;
+  nextDampSnoozeCount: number;
+  stepDays: number;
+}
+
+export function computeDampSnoozeCalibration(
+  plant: PlantRecord,
+  monthlyTemps: MonthlyTemp[],
+  now = new Date(),
+  snoozeDays = 2,
+): DampSnoozeCalibration {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const todayStart = startOfLocalDay(now);
+  const currentCalc = calculateWateringSchedule(plant, monthlyTemps, now);
+  const anchorMs = Math.max(todayStart.getTime(), currentCalc.nextWaterDate.getTime());
+  const targetDay = new Date(anchorMs + snoozeDays * msPerDay);
+  // Store at local noon so timezone conversion never shifts the target calendar day.
+  const snoozedUntilAt = new Date(
+    targetDay.getFullYear(),
+    targetDay.getMonth(),
+    targetDay.getDate(),
+    12,
+    0,
+    0,
+  ).toISOString();
+
+  const currentBase = Math.max(1, Math.min(90, Number(plant.baseWaterDays) || 7));
+  const rawStep = Math.min(1.5, Math.max(0.5, Number((currentBase * 0.1).toFixed(1))));
+  const nextBaseWaterDays = Math.min(90, Number((currentBase + rawStep).toFixed(1)));
+  const stepDays = Number((nextBaseWaterDays - currentBase).toFixed(1));
+  const nextDampSnoozeCount = Math.min(1000, Math.max(0, Math.round(plant.dampSnoozeCount ?? 0)) + 1);
+
+  return {
+    snoozedUntilAt,
+    nextBaseWaterDays,
+    nextDampSnoozeCount,
+    stepDays,
   };
 }
 
@@ -523,4 +587,67 @@ export function formatDueSummary(daysUntilWater: number): string {
   if (daysUntilWater === 0) return 'Water today';
   if (daysUntilWater === 1) return 'Tomorrow';
   return `In ${daysUntilWater}d`;
+}
+
+export function buildLocalGrowthFallbackAssessment(params: {
+  plant: PlantRecord;
+  calc: WateringCalculation;
+  avgRecordedLux: number;
+  hasPreviousPhoto: boolean;
+}): {
+  healthStatus: 'thriving' | 'watch' | 'issue';
+  growthSummary: string;
+  issueDetected: string;
+  recommendedAction: string;
+} {
+  const {plant, calc, avgRecordedLux, hasPreviousPhoto} = params;
+  const minLux = plant.idealLuxMin ?? 250;
+  const maxLux = plant.idealLuxMax ?? 1600;
+  const issues: string[] = [];
+  const actions: string[] = [];
+
+  if (avgRecordedLux < minLux) {
+    issues.push(
+      `Average light (${Math.round(avgRecordedLux)} lx) is below target (${minLux}–${maxLux} lx), which can slow new leaves or cause leggy stems.`,
+    );
+    actions.push('Move closer to your Barcelona north glass edge and rotate the pot 90°.');
+  }
+
+  if (calc.status === 'overdue') {
+    issues.push(
+      `Watering is ${Math.abs(calc.daysUntilWater)}d overdue (check for drooping or dull foliage).`,
+    );
+    actions.push('Check top 3 cm of soil and water thoroughly if dry.');
+  }
+
+  if (calc.effectiveHumidityPct < 45) {
+    issues.push(
+      `Room humidity (${Math.round(calc.effectiveHumidityPct)}% RH) is dry, which can brown leaf tips.`,
+    );
+    actions.push('Keep away from heating vents or group plants together.');
+  }
+
+  const healthStatus: 'thriving' | 'watch' | 'issue' =
+    avgRecordedLux < minLux * 0.7 || (calc.status === 'overdue' && calc.daysUntilWater <= -3)
+      ? 'issue'
+      : issues.length > 0
+        ? 'watch'
+        : 'thriving';
+
+  const growthSummary = hasPreviousPhoto
+    ? `Saved timeline comparison photo (${Math.round(avgRecordedLux)} lx avg, ${calc.effectiveTempC.toFixed(1)}°C). AI vision offline — run online check later.`
+    : `Saved baseline growth photo (${Math.round(avgRecordedLux)} lx avg, ${calc.effectiveTempC.toFixed(1)}°C). AI vision offline — run online check later.`;
+
+  const issueDetected = issues.join(' ').slice(0, 300);
+  const recommendedAction = (
+    actions.join(' ') ||
+    'Open this plant in the hosted web preview and tap Analyze Photo Online for full leaf-level visual inspection.'
+  ).slice(0, 400);
+
+  return {
+    healthStatus,
+    growthSummary: growthSummary.slice(0, 300),
+    issueDetected,
+    recommendedAction,
+  };
 }

@@ -1,11 +1,11 @@
 # NordFlora Firestore Security Specification
 
 ## 1. Data Invariants
-1. **Strict Ownership Isolation**: Every plant/group (`/users/{userId}/plants/{plantId}`), log entry (`/users/{userId}/plants/{plantId}/logs/{logId}`), and monthly room temperature (`/users/{userId}/monthlyTemps/{monthId}`) can only be read, created, updated, or deleted by the authenticated, email-verified user whose `request.auth.uid == userId == resource.data.ownerId`.
-2. **Master Gate Relational Integrity**: Log entries in `/users/{userId}/plants/{plantId}/logs/{logId}` cannot exist without an existing parent plant document owned by the same user (`exists()` + `get()` verification on create/get/delete).
+1. **Strict Ownership Isolation**: Every plant/group (`/users/{userId}/plants/{plantId}`), log entry (`/users/{userId}/plants/{plantId}/logs/{logId}`), growth timeline photo (`/users/{userId}/plants/{plantId}/growthPhotos/{photoId}`), and monthly room temperature (`/users/{userId}/monthlyTemps/{monthId}`) can only be read, created, updated, or deleted by the authenticated, email-verified user whose `request.auth.uid == userId == resource.data.ownerId`.
+2. **Master Gate Relational Integrity**: Subcollection records in `/users/{userId}/plants/{plantId}/logs/{logId}` and `/users/{userId}/plants/{plantId}/growthPhotos/{photoId}` cannot exist without an existing parent plant document owned by the same user (`exists()` + `get()` verification on create/get/delete).
 3. **Strict Schema & Bounds**:
    - `quantity` is `1` when `entryType == 'individual'` and `2..200` when `entryType == 'group'`.
-   - `latestLux` is bounded `[0, 150000]`, `baseWaterDays` `[1, 90]`, `avgTempC` `[5, 42]`, `minTempC <= avgTempC <= maxTempC`, `humidityPct` `[15, 95]`.
+   - `latestLux` is bounded `[0, 150000]`, `baseWaterDays` `[1, 90]`, `dampSnoozeCount` `[0, 1000]`, `daylightHours` `[0.5, 18]`, `avgTempC` `[5, 42]`, `minTempC <= avgTempC <= maxTempC`, `humidityPct` `[15, 95]`.
    - `photoDataUrl` is strictly capped at `180000` characters (~130KB JPEG) to protect document size limits.
 4. **Temporal & Identity Immutability**: `createdAt == request.time` on creation; `ownerId`, `id`, `monthKey`, and `createdAt` are immutable on update; `updatedAt == request.time` on update.
 

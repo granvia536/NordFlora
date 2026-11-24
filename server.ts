@@ -116,7 +116,7 @@ function sleep(ms: number): Promise<void> {
 
 async function startServer() {
   const app = express();
-  app.use(express.json({limit: '1mb'}));
+  app.use(express.json({limit: '2mb'}));
 
   const CAPACITOR_ORIGINS = new Set([
     'https://nordflora.local',
@@ -124,7 +124,8 @@ async function startServer() {
     'http://localhost',
   ]);
 
-  app.use('/api/identify-plant', (req, res, next) => {
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
     const origin = req.headers.origin;
     if (origin && CAPACITOR_ORIGINS.has(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
@@ -384,6 +385,238 @@ async function startServer() {
       res.status(502).json({error: msg});
     }
   });
+
+  app.post('/api/analyze-growth', async (req, res) => {
+    const uid = await verifyFirebaseBearerToken(req.headers.authorization);
+    if (!uid) {
+      res.status(401).json({error: 'Please sign in with Google before analyzing plant growth.'});
+      return;
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      res.status(503).json({
+        error: 'Gemini API key is not configured on the server. Add GEMINI_API_KEY in Settings > Secrets.',
+      });
+      return;
+    }
+
+    const body = req.body as {
+      currentPhotoDataUrl?: unknown;
+      previousPhotoDataUrl?: unknown;
+      previousRecordedAt?: unknown;
+      plantContext?: {
+        name?: unknown;
+        speciesName?: unknown;
+        botanicalName?: unknown;
+        avgLux?: unknown;
+        idealLuxMin?: unknown;
+        idealLuxMax?: unknown;
+        baseWaterDays?: unknown;
+        potMaterial?: unknown;
+        potSize?: unknown;
+        avgTempC?: unknown;
+        humidityPct?: unknown;
+        daylightHours?: unknown;
+      };
+    };
+
+    const currentUrl =
+      typeof body?.currentPhotoDataUrl === 'string' ? body.currentPhotoDataUrl.trim() : '';
+    const dataUrlRegex = /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/;
+    const currentMatch = dataUrlRegex.exec(currentUrl);
+    if (!currentMatch || currentUrl.length > 450000) {
+      res.status(400).json({error: 'Invalid or oversized current plant photo.'});
+      return;
+    }
+
+    const prevUrl =
+      typeof body?.previousPhotoDataUrl === 'string' ? body.previousPhotoDataUrl.trim() : '';
+    const prevMatch = prevUrl && prevUrl.length <= 450000 ? dataUrlRegex.exec(prevUrl) : null;
+    const prevDateStr =
+      typeof body?.previousRecordedAt === 'string'
+        ? body.previousRecordedAt.slice(0, 24)
+        : '';
+
+    const ctx = body?.plantContext ?? {};
+    const speciesLabel =
+      typeof ctx.speciesName === 'string' && ctx.speciesName.trim()
+        ? ctx.speciesName.trim().slice(0, 80)
+        : 'Houseplant';
+    const botanicalLabel =
+      typeof ctx.botanicalName === 'string' && ctx.botanicalName.trim()
+        ? ` (${ctx.botanicalName.trim().slice(0, 100)})`
+        : '';
+    const avgLux = Number(ctx.avgLux) || 350;
+    const idealMin = Number(ctx.idealLuxMin) || 250;
+    const idealMax = Number(ctx.idealLuxMax) || 1600;
+    const baseDays = Number(ctx.baseWaterDays) || 10;
+    const potStr = `${typeof ctx.potSize === 'string' ? ctx.potSize : 'medium'} ${typeof ctx.potMaterial === 'string' ? ctx.potMaterial : 'ceramic'}`;
+    const tempC = Number(ctx.avgTempC) || 20;
+    const humidityPct = Number(ctx.humidityPct) || 60;
+    const daylightHours = Number(ctx.daylightHours) || 11;
+
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    const parts: Array<{text?: string; inlineData?: {mimeType: string; data: string}}> = [];
+    if (prevMatch) {
+      parts.push({
+        text: `EARLIER REFERENCE PHOTO (${prevDateStr || 'previous check-in'}):`,
+      });
+      parts.push({
+        inlineData: {
+          mimeType: prevMatch[1] === 'image/jpg' ? 'image/jpeg' : prevMatch[1],
+          data: prevMatch[2],
+        },
+      });
+      parts.push({
+        text: 'CURRENT PHOTO (taken now):',
+      });
+    }
+    parts.push({
+      inlineData: {
+        mimeType: currentMatch[1] === 'image/jpg' ? 'image/jpeg' : currentMatch[1],
+        data: currentMatch[2],
+      },
+    });
+
+    const promptLines = [
+      `Evaluate the growth and health of this ${speciesLabel}${botanicalLabel}.`,
+      prevMatch
+        ? 'Compare the CURRENT PHOTO against the EARLIER REFERENCE PHOTO to describe new leaves, height/fullness change, leaf perkiness, or decline.'
+        : 'Assess overall leaf vigor, new shoot/leaf activity, coloration, stem spacing, and soil/foliage condition from this photo.',
+      `Barcelona North-Window Environment Context: avg daylight ${Math.round(avgLux)} lux (species target ${idealMin}-${idealMax} lux), ${daylightHours}h daylight/day, ${tempC.toFixed(1)}°C, ${Math.round(humidityPct)}% RH, ${potStr} pot, ${baseDays}d base watering interval.`,
+      'If growth is NOT optimal, clearly diagnose what looks wrong visually (e.g., yellowing/chlorosis from overwatering or root stress, brown crispy tips from dry air, leggy stretched stems from insufficient north-window light, drooping/wilting, leaf spots, or pests) and correlate with the environment numbers above.',
+      'Return ONLY a JSON object with keys:',
+      '- healthStatus: "thriving" | "watch" | "issue"',
+      '- growthSummary: string under 280 chars describing observed growth & vigor (and comparison if earlier photo provided).',
+      '- issueDetected: string under 280 chars describing what is wrong if growth is not optimal (or empty string "" if thriving/optimal).',
+      '- recommendedAction: string under 380 chars with concrete next steps referencing their lux, watering, or humidity if helpful.',
+    ];
+    parts.push({text: promptLines.join('\n')});
+
+    const attempts: Array<{model: string; delayMs: number}> = [
+      {model: 'gemini-4-hydrogen', delayMs: 0},
+      {model: 'gemini-3.1-flash-lite', delayMs: 800},
+    ];
+
+    let response: GenerateContentResponse | null = null;
+    let lastError: unknown = null;
+
+    for (const attempt of attempts) {
+      if (attempt.delayMs > 0) await sleep(attempt.delayMs);
+      try {
+        response = await ai.models.generateContent({
+          model: attempt.model,
+          contents: {parts},
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                healthStatus: {type: Type.STRING},
+                growthSummary: {type: Type.STRING},
+                issueDetected: {type: Type.STRING},
+                recommendedAction: {type: Type.STRING},
+              },
+              required: [
+                'healthStatus',
+                'growthSummary',
+                'issueDetected',
+                'recommendedAction',
+              ],
+            },
+          },
+        });
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err;
+        if (!isQuotaOrRateLimitError(err)) {
+          break;
+        }
+      }
+    }
+
+    if (!response) {
+      if (isQuotaOrRateLimitError(lastError)) {
+        res.status(429).json({
+          error:
+            'Gemini API quota or rate limit reached (429). Wait a moment and retry, or check Settings > Secrets.',
+        });
+        return;
+      }
+      const msg =
+        lastError instanceof Error ? lastError.message : 'Plant growth analysis failed.';
+      res.status(502).json({error: msg});
+      return;
+    }
+
+    const parsed = tryExtractJson(response.text ?? '');
+    if (!parsed) {
+      res.status(502).json({
+        error: 'Could not interpret the plant growth photo cleanly. Try a clearer well-lit shot.',
+      });
+      return;
+    }
+
+    const rawStatus = typeof parsed.healthStatus === 'string' ? parsed.healthStatus.trim() : '';
+    const healthStatus =
+      rawStatus === 'thriving' || rawStatus === 'watch' || rawStatus === 'issue'
+        ? rawStatus
+        : 'watch';
+    const growthSummary =
+      typeof parsed.growthSummary === 'string' && parsed.growthSummary.trim()
+        ? parsed.growthSummary.trim().slice(0, 300)
+        : 'Photo recorded in growth timeline.';
+    const issueDetected =
+      typeof parsed.issueDetected === 'string'
+        ? parsed.issueDetected.trim().slice(0, 300)
+        : '';
+    const recommendedAction =
+      typeof parsed.recommendedAction === 'string'
+        ? parsed.recommendedAction.trim().slice(0, 400)
+        : 'Keep monitoring leaf firmness and topsoil moisture before the next watering.';
+
+    res.json({
+      healthStatus,
+      growthSummary,
+      issueDetected,
+      recommendedAction,
+    });
+  });
+
+  app.use('/api', (_req, res) => {
+    res.status(404).json({error: 'API route not found.'});
+  });
+
+  app.use(
+    '/api',
+    (
+      err: unknown,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      const status =
+        typeof (err as {status?: unknown})?.status === 'number'
+          ? (err as {status: number}).status
+          : 500;
+      const msg =
+        status === 413
+          ? 'Uploaded photos are too large. Try snapping a closer single shot.'
+          : err instanceof Error
+            ? err.message
+            : 'Unexpected API server error.';
+      res.status(status).json({error: msg});
+    },
+  );
 
   const httpServer = http.createServer(app);
 

@@ -43,7 +43,7 @@ service cloud.firestore {
         'careDetails', 'idealLuxMin', 'idealLuxMax', 'sourceTitle', 'sourceUrl',
         'entryType', 'quantity', 'potMaterial', 'potSize', 'baseWaterDays',
         'latestLux', 'avgLux', 'luxReadingCount', 'lastLuxMonth',
-        'luxSource', 'lastLuxAt', 'lastWateredAt', 'notes',
+        'luxSource', 'lastLuxAt', 'lastWateredAt', 'snoozedUntilAt', 'dampSnoozeCount', 'notes',
         'photoDataUrl', 'createdAt', 'updatedAt'
       ])
       && data.id is string && data.id == plantId && isValidId(data.id)
@@ -72,6 +72,8 @@ service cloud.firestore {
       && data.luxSource is string && data.luxSource in ['sensor', 'camera', 'manual']
       && data.lastLuxAt is string && data.lastLuxAt.size() >= 10 && data.lastLuxAt.size() <= 40
       && data.lastWateredAt is string && data.lastWateredAt.size() >= 10 && data.lastWateredAt.size() <= 40
+      && (!('snoozedUntilAt' in data) || (data.snoozedUntilAt is string && data.snoozedUntilAt.size() <= 40 && (data.snoozedUntilAt == '' || data.snoozedUntilAt.size() >= 10)))
+      && (!('dampSnoozeCount' in data) || (data.dampSnoozeCount is int && data.dampSnoozeCount >= 0 && data.dampSnoozeCount <= 1000))
       && data.notes is string && data.notes.size() <= 300
       && data.photoDataUrl is string && data.photoDataUrl.size() <= 180000
       && data.createdAt is timestamp
@@ -90,11 +92,35 @@ service cloud.firestore {
       && data.id is string && data.id == logId && isValidId(data.id)
       && data.ownerId is string && data.ownerId == userId && data.ownerId == request.auth.uid && data.ownerId.size() <= 128
       && data.plantId is string && data.plantId == plantId && isValidId(data.plantId)
-      && data.logType is string && data.logType in ['water', 'lux']
+      && data.logType is string && data.logType in ['water', 'lux', 'snooze']
       && data.luxValue is number && data.luxValue >= 0 && data.luxValue <= 150000
       && data.luxSource is string && data.luxSource in ['sensor', 'camera', 'manual', 'none']
       && (!('readingPeriod' in data) || (data.readingPeriod is string && data.readingPeriod in ['peak_noon', 'general', 'none']))
       && data.note is string && data.note.size() <= 160
+      && data.recordedAt is string && data.recordedAt.size() >= 10 && data.recordedAt.size() <= 40
+      && data.createdAt is timestamp;
+    }
+
+    function isValidGrowthPhoto(data, userId, plantId, photoId) {
+      return data.keys().hasAll([
+        'id', 'ownerId', 'plantId', 'photoDataUrl', 'healthStatus',
+        'growthSummary', 'issueDetected', 'recommendedAction',
+        'avgLuxSnapshot', 'recordedAt', 'createdAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'ownerId', 'plantId', 'photoDataUrl', 'healthStatus',
+        'growthSummary', 'issueDetected', 'recommendedAction',
+        'avgLuxSnapshot', 'recordedAt', 'createdAt'
+      ])
+      && data.id is string && data.id == photoId && isValidId(data.id)
+      && data.ownerId is string && data.ownerId == userId && data.ownerId == request.auth.uid && data.ownerId.size() <= 128
+      && data.plantId is string && data.plantId == plantId && isValidId(data.plantId)
+      && data.photoDataUrl is string && data.photoDataUrl.size() >= 10 && data.photoDataUrl.size() <= 180000
+      && data.healthStatus is string && data.healthStatus in ['thriving', 'watch', 'issue']
+      && data.growthSummary is string && data.growthSummary.size() >= 1 && data.growthSummary.size() <= 300
+      && data.issueDetected is string && data.issueDetected.size() <= 300
+      && data.recommendedAction is string && data.recommendedAction.size() <= 400
+      && data.avgLuxSnapshot is number && data.avgLuxSnapshot >= 0 && data.avgLuxSnapshot <= 150000
       && data.recordedAt is string && data.recordedAt.size() >= 10 && data.recordedAt.size() <= 40
       && data.createdAt is timestamp;
     }
@@ -106,7 +132,7 @@ service cloud.firestore {
       ])
       && data.keys().hasOnly([
         'id', 'ownerId', 'monthKey', 'avgTempC', 'minTempC', 'maxTempC',
-        'humidityPct', 'heatingOrAc', 'note', 'createdAt', 'updatedAt'
+        'humidityPct', 'heatingOrAc', 'daylightHours', 'note', 'createdAt', 'updatedAt'
       ])
       && data.id is string && data.id == monthId && isValidMonthKey(data.id)
       && data.ownerId is string && data.ownerId == userId && data.ownerId == request.auth.uid && data.ownerId.size() <= 128
@@ -117,6 +143,7 @@ service cloud.firestore {
       && data.minTempC <= data.avgTempC && data.avgTempC <= data.maxTempC
       && data.humidityPct is number && data.humidityPct >= 15 && data.humidityPct <= 95
       && data.heatingOrAc is string && data.heatingOrAc in ['none', 'heating', 'ac', 'natural_vent']
+      && (!('daylightHours' in data) || (data.daylightHours is number && data.daylightHours >= 0.5 && data.daylightHours <= 18))
       && data.note is string && data.note.size() <= 200
       && data.createdAt is timestamp
       && data.updatedAt is timestamp;
@@ -141,7 +168,7 @@ service cloud.firestore {
         && incoming().updatedAt == request.time
         && (
           // Action 1: Quick Water Now
-          incoming().diff(existing()).affectedKeys().hasOnly(['lastWateredAt', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['lastWateredAt', 'snoozedUntilAt', 'updatedAt']) ||
           // Action 2: Record Lux Measurement & Rolling Average
           incoming().diff(existing()).affectedKeys().hasOnly([
             'latestLux', 'avgLux', 'luxReadingCount', 'lastLuxMonth',
@@ -159,8 +186,12 @@ service cloud.firestore {
             'idealLuxMin', 'idealLuxMax', 'sourceTitle', 'sourceUrl',
             'entryType', 'quantity', 'potMaterial', 'potSize', 'baseWaterDays',
             'latestLux', 'avgLux', 'luxReadingCount', 'lastLuxMonth',
-            'luxSource', 'lastLuxAt', 'lastWateredAt', 'notes',
-            'photoDataUrl', 'updatedAt'
+            'luxSource', 'lastLuxAt', 'lastWateredAt', 'snoozedUntilAt',
+            'dampSnoozeCount', 'notes', 'photoDataUrl', 'updatedAt'
+          ]) ||
+          // Action 5: Still Damp (+2d) Snooze & Smart Interval Calibration
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'snoozedUntilAt', 'baseWaterDays', 'dampSnoozeCount', 'updatedAt'
           ])
         );
       allow delete: if isOwner(userId) && isValidId(plantId) && existing().ownerId == request.auth.uid;
@@ -187,6 +218,29 @@ service cloud.firestore {
           && existing().ownerId == request.auth.uid
           && get(/databases/$(database)/documents/users/$(userId)/plants/$(plantId)).data.ownerId == request.auth.uid;
       }
+
+      // Subcollection: Growth Timeline Photos (Master Gate pattern)
+      match /growthPhotos/{photoId} {
+        allow get: if isOwner(userId)
+          && isValidId(plantId)
+          && isValidId(photoId)
+          && existing().ownerId == request.auth.uid
+          && get(/databases/$(database)/documents/users/$(userId)/plants/$(plantId)).data.ownerId == request.auth.uid;
+        allow list: if isOwner(userId) && isValidId(plantId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isOwner(userId)
+          && isValidId(plantId)
+          && isValidId(photoId)
+          && isValidGrowthPhoto(incoming(), userId, plantId, photoId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId)/plants/$(plantId))
+          && get(/databases/$(database)/documents/users/$(userId)/plants/$(plantId)).data.ownerId == request.auth.uid;
+        allow update: if false;
+        allow delete: if isOwner(userId)
+          && isValidId(plantId)
+          && isValidId(photoId)
+          && existing().ownerId == request.auth.uid
+          && get(/databases/$(database)/documents/users/$(userId)/plants/$(plantId)).data.ownerId == request.auth.uid;
+      }
     }
 
     // Monthly Barcelona Room Temperature Logs
@@ -209,7 +263,7 @@ service cloud.firestore {
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'avgTempC', 'minTempC', 'maxTempC', 'humidityPct',
-          'heatingOrAc', 'note', 'updatedAt'
+          'heatingOrAc', 'daylightHours', 'note', 'updatedAt'
         ]);
       allow delete: if isOwner(userId) && isValidMonthKey(monthId) && existing().ownerId == request.auth.uid;
     }

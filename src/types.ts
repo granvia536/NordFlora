@@ -30,6 +30,8 @@ export interface PlantRecord {
   luxSource: LuxSource;
   lastLuxAt: string;
   lastWateredAt: string;
+  snoozedUntilAt?: string;
+  dampSnoozeCount?: number;
   notes: string;
   photoDataUrl: string;
   createdAt?: unknown;
@@ -53,11 +55,34 @@ export interface PlantLog {
   id: string;
   ownerId: string;
   plantId: string;
-  logType: 'water' | 'lux';
+  logType: 'water' | 'lux' | 'snooze';
   luxValue: number;
   luxSource: LuxSource | 'none';
   readingPeriod?: ReadingPeriod;
   note: string;
+  recordedAt: string;
+  createdAt?: unknown;
+}
+
+export type GrowthHealthStatus = 'thriving' | 'watch' | 'issue';
+
+export interface GrowthAnalysisResult {
+  healthStatus: GrowthHealthStatus;
+  growthSummary: string;
+  issueDetected: string;
+  recommendedAction: string;
+}
+
+export interface PlantGrowthPhoto {
+  id: string;
+  ownerId: string;
+  plantId: string;
+  photoDataUrl: string;
+  healthStatus: GrowthHealthStatus;
+  growthSummary: string;
+  issueDetected: string;
+  recommendedAction: string;
+  avgLuxSnapshot: number;
   recordedAt: string;
   createdAt?: unknown;
 }
@@ -71,6 +96,7 @@ export interface MonthlyTemp {
   maxTempC: number;
   humidityPct: number;
   heatingOrAc: HeatingOrAc;
+  daylightHours?: number;
   note: string;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -106,5 +132,6 @@ export interface WateringCalculation {
   effectiveTempC: number;
   effectiveHumidityPct: number;
   daylightHours: number;
+  isSnoozed: boolean;
   factors: ScheduleFactor[];
 }

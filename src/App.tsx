@@ -29,6 +29,7 @@ import {
   markPlantWatered,
   recordPlantLux,
   saveMonthlyTemp,
+  snoozePlantDamp,
   subscribeMonthlyTemps,
   subscribePlants,
   updatePlantDetails,
@@ -224,6 +225,11 @@ const MainApp: React.FC = () => {
     );
   };
 
+  const handleSnoozeDamp = async (plant: PlantRecord) => {
+    if (!user) return;
+    await snoozePlantDamp(user.uid, plant, monthlyTemps);
+  };
+
   const handleUpdatePhoto = async (
     plantId: string,
     dataUrl: string,
@@ -245,11 +251,12 @@ const MainApp: React.FC = () => {
     source: LuxSource,
     readingPeriod: 'peak_noon' | 'general',
     note?: string,
+    mode: 'append' | 'set_average' = 'append',
   ) => {
     if (!user) return;
     const targetPlant = plants.find((p) => p.id === plantId);
     if (!targetPlant) return;
-    await recordPlantLux(user.uid, targetPlant, luxValue, source, readingPeriod, note);
+    await recordPlantLux(user.uid, targetPlant, luxValue, source, readingPeriod, note, mode);
   };
 
   const handleSaveMonthlyTemp = async (
@@ -430,6 +437,7 @@ const MainApp: React.FC = () => {
             }}
             onSelectPlant={(plant) => setDetailPlantId(plant.id)}
             onWaterPlant={handleWaterPlant}
+            onSnoozeDamp={handleSnoozeDamp}
             onAddPlant={() => {
               setEditingPlant(null);
               setFormOpen(true);
@@ -450,6 +458,7 @@ const MainApp: React.FC = () => {
             onBackToWidget={() => navigateTo('widget')}
             onSelectPlant={(plant) => setDetailPlantId(plant.id)}
             onWaterPlant={handleWaterPlant}
+            onSnoozeDamp={handleSnoozeDamp}
             onAddPlant={() => {
               setEditingPlant(null);
               setFormOpen(true);
@@ -527,6 +536,7 @@ const MainApp: React.FC = () => {
         monthlyTemps={monthlyTemps}
         onClose={() => setDetailPlantId(null)}
         onWater={handleWaterPlant}
+        onSnoozeDamp={handleSnoozeDamp}
         onUpdatePhoto={handleUpdatePhoto}
         onEdit={(plant) => {
           setEditingPlant(plant);
